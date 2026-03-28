@@ -5,7 +5,7 @@ from sqlalchemy import select
 from app.database import async_session
 from app.models import Game, Board, Square, BoardStatus, Sport, Quarter
 
-THESPORTSDB_BASE = "https://www.thesportsdb.com/api/v1/json"
+THESPORTSDB_BASE = "https://www.thesportsdb.com/api/v1/json/123"
 
 PRICE_TIERS = [0.50, 1, 2, 5, 10, 20, 50, 100, 1000, 10000]
 
