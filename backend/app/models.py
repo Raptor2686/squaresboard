@@ -46,6 +46,18 @@ class User(Base):
 
     squares: Mapped[list["Square"]] = relationship(back_populates="owner")
     private_boards: Mapped[list["Board"]] = relationship(back_populates="created_by_user")
+    sessions: Mapped[list["Session"]] = relationship(back_populates="user", cascade="all, delete-orphan")
+
+
+class Session(Base):
+    __tablename__ = "sessions"
+
+    token: Mapped[str] = mapped_column(String(64), primary_key=True)
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    user: Mapped["User"] = relationship(back_populates="sessions")
 
 
 class Game(Base):
@@ -85,7 +97,7 @@ class Board(Base):
 
     game: Mapped["Game"] = relationship(back_populates="boards")
     created_by_user: Mapped["User | None"] = relationship(back_populates="private_boards")
-    squares: Mapped[list["Square"]] = relationship(back_populates="board")
+    squares: Mapped[list["Square"]] = relationship(back_populates="board", cascade="all, delete-orphan")
     winning_square_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
 
 
@@ -95,8 +107,8 @@ class Square(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     board_id: Mapped[str] = mapped_column(String(36), ForeignKey("boards.id"), nullable=False)
     owner_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id"), nullable=True)
-    number: Mapped[int | None] = mapped_column(Integer, nullable=True)  # 0-9, assigned when board fills
-    position: Mapped[int] = mapped_column(Integer, nullable=False)  # 0-9
+    number: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    position: Mapped[int] = mapped_column(Integer, nullable=False)
     purchased_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     stripe_payment_intent: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
@@ -111,7 +123,7 @@ class Payout(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     square_id: Mapped[str] = mapped_column(String(36), ForeignKey("squares.id"), nullable=False)
     amount_cents: Mapped[int] = mapped_column(Integer, nullable=False)
-    status: Mapped[str] = mapped_column(String(20), default="pending")  # pending, sent, failed
+    status: Mapped[str] = mapped_column(String(20), default="pending")
     stripe_transfer_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 

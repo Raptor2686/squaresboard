@@ -1,18 +1,21 @@
 import uuid
 import random
 from datetime import datetime
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Cookie
+from typing import Annotated
 from sqlalchemy import select
 from app.database import async_session
-from app.models import Board, BoardStatus, Square
+from app.models import Board, BoardStatus, Square, User
+from app.api.auth import _get_user_from_token
 
 router = APIRouter()
+
 
 PRICE_TIERS = [0.50, 1, 2, 5, 10, 20, 50, 100, 1000, 10000]
 
 
-def get_current_user(request):
-    pass  # TODO: implement session auth
+async def get_user(token: Annotated[str | None, Cookie()] = None) -> User | None:
+    return await _get_user_from_token(token)
 
 
 @router.get("/board/{board_id}")
@@ -47,8 +50,11 @@ async def get_board_squares(board_id: str):
 async def purchase_square(
     board_id: str,
     position: int,
-    user_id: str,  # TODO: from session
+    user: Annotated[User | None, Depends(get_user)],
 ):
+    if not user:
+        raise HTTPException(status_code=401, detail="Must be logged in to purchase a square")
+
     async with async_session() as session:
         result = await session.execute(select(Board).where(Board.id == board_id))
         board = result.scalar_one_or_none()
@@ -66,20 +72,20 @@ async def purchase_square(
         if square.owner_id is not None:
             raise HTTPException(status_code=400, detail="Square already taken")
 
-        square.owner_id = user_id
+        square.owner_id = user.id
         square.purchased_at = datetime.utcnow()
         await session.commit()
 
-        # Check if board is now full
-        all_squares = await session.execute(
+        # Check if board is now full — assign random numbers if so
+        all_squares_result = await session.execute(
             select(Square).where(Square.board_id == board_id)
         )
-        all_owned = all(s.owner_id is not None for s in all_squares.scalars().all())
-        if all_owned:
+        all_squares = all_squares_result.scalars().all()
+        if all(s.owner_id is not None for s in all_squares):
             numbers = list(range(10))
             random.shuffle(numbers)
-            for i, sq in enumerate(all_squares.scalars().all()):
-                sq.number = numbers[i]
+            for sq, num in zip(all_squares, numbers):
+                sq.number = num
             board.status = BoardStatus.LOCKED
             await session.commit()
 
