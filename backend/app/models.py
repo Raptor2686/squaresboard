@@ -138,10 +138,11 @@ class Transaction(Base):
     __tablename__ = "transactions"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), nullable=False)
-    amount_cents: Mapped[int] = mapped_column(Integer, nullable=False)  # positive = credit, negative = debit
-    type: Mapped[str] = mapped_column(String(20), nullable=False)  # deposit | purchase | payout | rake | withdrawal | refund
-    reference_id: Mapped[str | None] = mapped_column(String(36), nullable=True)  # board_id, payout_id, etc.
+    user_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id"), nullable=True)  # null for rake
+    board_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("boards.id"), nullable=True)  # for rake/payout
+    amount_cents: Mapped[int] = mapped_column(Integer, nullable=False)
+    type: Mapped[str] = mapped_column(String(20), nullable=False)
+    reference_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     user: Mapped["User"] = relationship(back_populates="transactions")

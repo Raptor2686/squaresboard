@@ -1,40 +1,46 @@
+import uuid
 import stripe
 from app.config import settings
+from sqlalchemy import select
 from app.database import async_session
-from app.models import Payout, Square
+from app.models import User, Transaction, Payout, Board, BoardStatus
 
 stripe.api_key = settings.STRIPE_SECRET_KEY
 
 
-async def send_payout(user_stripe_customer_id: str | None, amount_cents: int, square_id: str):
-    if not user_stripe_customer_id:
-        # Queue for manual payout — user needs to connect Stripe
-        async with async_session() as session:
-            payout = Payout(
-                id=square_id + "_payout",
-                square_id=square_id,
-                amount_cents=amount_cents,
-                status="pending_manual",
-            )
-            session.add(payout)
-            await session.commit()
-        return
+async def send_payout(winner_user_id: str, amount_cents: int, board_id: str):
+    """
+    Credit the winner's wallet balance.
+    No Stripe transfer happens here — that's a withdrawal operation.
+    """
+    async with async_session() as session:
+        # Credit winner's wallet
+        user_result = await session.execute(select(User).where(User.id == winner_user_id))
+        user = user_result.scalar_one_or_none()
+        if not user:
+            print(f"[payout] Winner user {winner_user_id} not found — manual payout needed")
+            return
 
-    try:
-        transfer = stripe.Transfer.create(
-            amount=amount_cents,
-            currency="usd",
-            destination=user_stripe_customer_id,
+        user.balance_cents += amount_cents
+
+        # Record payout transaction
+        payout_tx = Transaction(
+            id=str(uuid.uuid4()),
+            user_id=winner_user_id,
+            board_id=board_id,
+            amount_cents=amount_cents,
+            type="payout",
         )
-        async with async_session() as session:
-            payout = Payout(
-                id=square_id + "_payout",
-                square_id=square_id,
-                amount_cents=amount_cents,
-                status="sent",
-                stripe_transfer_id=transfer.id,
-            )
-            session.add(payout)
-            await session.commit()
-    except Exception as e:
-        print(f"Payout failed: {e}")
+        session.add(payout_tx)
+
+        # Record Payout audit row
+        payout_record = Payout(
+            id=str(uuid.uuid4()),
+            square_id=board_id,  # reuse board_id as reference
+            amount_cents=amount_cents,
+            status="credited",
+        )
+        session.add(payout_record)
+        await session.commit()
+
+        print(f"[payout] Credited {amount_cents} cents to user {winner_user_id} for board {board_id}")
