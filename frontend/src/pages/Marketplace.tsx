@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
 
+const API = (import.meta.env.VITE_API_URL || "http://localhost:8000") + "/api";
 const PRICE_TIERS = [0.50, 1, 2, 5, 10, 20, 50, 100, 1000, 10000];
 const QUARTERS = ["Q1", "Q2", "Q3", "Q4"];
 const SPORTS = ["football", "basketball", "baseball"];
@@ -29,28 +31,28 @@ export default function Marketplace() {
   const [price, setPrice] = useState<number>(0);
   const [games, setGames] = useState<Game[]>([]);
   const [boards, setBoards] = useState<Board[]>([]);
-  const [selectedGame, setSelectedGame] = useState<string>("");
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("http://localhost:8000/api/games")
+    fetch(`${API}/games`)
       .then((r) => r.json())
       .then(setGames)
       .catch(() => setGames([]));
   }, []);
 
   useEffect(() => {
+    setLoading(true);
     const params = new URLSearchParams();
     if (sport) params.set("sport", sport);
-    if (selectedGame) params.set("game_id", selectedGame);
     if (quarter) params.set("quarter", quarter);
     if (price) params.set("price_tier", String(price));
-    fetch(`http://localhost:8000/api/boards/?${params}`)
+    fetch(`${API}/boards/?${params}`, { credentials: "include" })
       .then((r) => r.json())
-      .then(setBoards)
-      .catch(() => setBoards([]));
-  }, [sport, quarter, price, selectedGame]);
+      .then((data) => { setBoards(data); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, [sport, quarter, price]);
 
-  const filteredBoards = boards.filter((b) => b.status === "open" || b.status === "locked");
+  const openBoards = boards.filter((b) => b.status === "open" || b.status === "locked");
 
   return (
     <div className="max-w-6xl mx-auto p-6">
@@ -59,7 +61,7 @@ export default function Marketplace() {
       {/* Filters */}
       <div className="flex flex-wrap gap-4 mb-8">
         <select
-          className="bg-zinc-800 border border-zinc-700 rounded px-3 py-2"
+          className="bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-white"
           value={sport}
           onChange={(e) => setSport(e.target.value)}
         >
@@ -69,7 +71,7 @@ export default function Marketplace() {
           ))}
         </select>
         <select
-          className="bg-zinc-800 border border-zinc-700 rounded px-3 py-2"
+          className="bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-white"
           value={quarter}
           onChange={(e) => setQuarter(e.target.value)}
         >
@@ -79,7 +81,7 @@ export default function Marketplace() {
           ))}
         </select>
         <select
-          className="bg-zinc-800 border border-zinc-700 rounded px-3 py-2"
+          className="bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-white"
           value={price}
           onChange={(e) => setPrice(Number(e.target.value))}
         >
@@ -91,18 +93,20 @@ export default function Marketplace() {
       </div>
 
       {/* Boards Grid */}
-      {filteredBoards.length === 0 ? (
+      {loading ? (
+        <div className="text-zinc-400 text-center py-16">Loading...</div>
+      ) : openBoards.length === 0 ? (
         <div className="text-zinc-400 text-center py-16 text-lg">
           No open boards match your filters. Check back soon!
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredBoards.map((board) => {
+          {openBoards.map((board) => {
             const game = games.find((g) => g.id === board.game_id);
             return (
-              <a
+              <Link
                 key={board.id}
-                href={`/board/${board.id}`}
+                to={`/board/${board.id}`}
                 className="block bg-zinc-800 border border-zinc-700 rounded-xl p-5 hover:border-blue-500 transition-colors"
               >
                 <div className="flex items-center gap-3 mb-3">
@@ -118,12 +122,12 @@ export default function Marketplace() {
                 </div>
                 <div className="flex justify-between text-sm text-zinc-400">
                   <span className="bg-zinc-700 px-2 py-0.5 rounded">{board.quarter}</span>
-                  <span className="text-green-400 font-semibold">${board.price_tier}/square</span>
+                  <span className="text-green-400 font-semibold">${board.price_tier}/sq</span>
                 </div>
                 <div className="mt-2 text-xs text-zinc-500">
                   {game?.event_time ? new Date(game.event_time).toLocaleString() : "TBD"}
                 </div>
-              </a>
+              </Link>
             );
           })}
         </div>
