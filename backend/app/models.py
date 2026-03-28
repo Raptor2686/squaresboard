@@ -111,6 +111,7 @@ class Square(Base):
     position: Mapped[int] = mapped_column(Integer, nullable=False)
     purchased_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     stripe_payment_intent: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    checkout_session_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     board: Mapped["Board"] = relationship(back_populates="squares")
     owner: Mapped["User | None"] = relationship(back_populates="squares")
