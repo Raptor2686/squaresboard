@@ -15,6 +15,7 @@ from app.api import (
     squares,
     users,
     webhooks,
+    wallet,
 )
 from app.services import (
     game_ingestion,
@@ -57,3 +58,4 @@ app.include_router(games.router, prefix="/api/games")
 app.include_router(boards.router, prefix="/api/boards")
 app.include_router(squares.router, prefix="/api/squares")
 app.include_router(webhooks.router, prefix="/api/webhooks")
+app.include_router(wallet.router, prefix="/api/wallet")

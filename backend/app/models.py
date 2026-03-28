@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from enum import Enum as PyEnum
 
-from sqlalchemy import String, Text, Float, Boolean, DateTime, ForeignKey, Enum, Integer
+from sqlalchemy import String, Float, Boolean, DateTime, ForeignKey, Enum, Integer
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database import Base
 
@@ -32,6 +32,7 @@ class GameStatus(str, PyEnum):
     UPCOMING = "upcoming"
     LIVE = "live"
     COMPLETED = "completed"
+    CANCELLED = "cancelled"
 
 
 class User(Base):
@@ -42,11 +43,13 @@ class User(Base):
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     display_name: Mapped[str] = mapped_column(String(100), nullable=False)
     stripe_customer_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    balance_cents: Mapped[int] = mapped_column(Integer, default=0)  # wallet balance
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     squares: Mapped[list["Square"]] = relationship(back_populates="owner")
     private_boards: Mapped[list["Board"]] = relationship(back_populates="created_by_user")
     sessions: Mapped[list["Session"]] = relationship(back_populates="user", cascade="all, delete-orphan")
+    transactions: Mapped[list["Transaction"]] = relationship(back_populates="user")
 
 
 class Session(Base):
@@ -94,11 +97,11 @@ class Board(Base):
     share_link: Mapped[str | None] = mapped_column(String(36), unique=True, nullable=True)
     created_by: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    winning_square_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
 
     game: Mapped["Game"] = relationship(back_populates="boards")
     created_by_user: Mapped["User | None"] = relationship(back_populates="private_boards")
     squares: Mapped[list["Square"]] = relationship(back_populates="board", cascade="all, delete-orphan")
-    winning_square_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
 
 
 class Square(Base):
@@ -107,11 +110,10 @@ class Square(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     board_id: Mapped[str] = mapped_column(String(36), ForeignKey("boards.id"), nullable=False)
     owner_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id"), nullable=True)
-    number: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    position: Mapped[int] = mapped_column(Integer, nullable=False)
+    number: Mapped[int | None] = mapped_column(Integer, nullable=True)  # 0-9, assigned when board fills
+    position: Mapped[int] = mapped_column(Integer, nullable=False)  # 0-9
     purchased_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    stripe_payment_intent: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    checkout_session_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    stripe_payment_intent: Mapped[str | None] = mapped_column(String(255), nullable=True)  # deposit PI for deposits
 
     board: Mapped["Board"] = relationship(back_populates="squares")
     owner: Mapped["User | None"] = relationship(back_populates="squares")
@@ -124,8 +126,22 @@ class Payout(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     square_id: Mapped[str] = mapped_column(String(36), ForeignKey("squares.id"), nullable=False)
     amount_cents: Mapped[int] = mapped_column(Integer, nullable=False)
-    status: Mapped[str] = mapped_column(String(20), default="pending")
+    status: Mapped[str] = mapped_column(String(20), default="pending")  # pending | sent | failed
     stripe_transfer_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     square: Mapped["Square"] = relationship(back_populates="payout")
+
+
+class Transaction(Base):
+    """Immutable ledger of all money movements."""
+    __tablename__ = "transactions"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), nullable=False)
+    amount_cents: Mapped[int] = mapped_column(Integer, nullable=False)  # positive = credit, negative = debit
+    type: Mapped[str] = mapped_column(String(20), nullable=False)  # deposit | purchase | payout | rake | withdrawal | refund
+    reference_id: Mapped[str | None] = mapped_column(String(36), nullable=True)  # board_id, payout_id, etc.
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    user: Mapped["User"] = relationship(back_populates="transactions")
