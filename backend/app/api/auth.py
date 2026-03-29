@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 from fastapi import APIRouter, HTTPException, Response, Cookie
 from typing import Annotated
 from pydantic import BaseModel, EmailStr
-from passlib.hash import bcrypt
+import bcrypt
 from sqlalchemy import select, delete
 
 from app.database import async_session
@@ -38,7 +38,7 @@ async def signup(data: SignupRequest, response: Response):
         user = User(
             id=str(uuid.uuid4()),
             email=data.email,
-            password_hash=bcrypt.hash(data.password),
+            password_hash=bcrypt.hashpw(data.password.encode(), bcrypt.gensalt()),
             display_name=data.display_name,
         )
         session.add(user)
@@ -64,7 +64,7 @@ async def login(data: LoginRequest, response: Response):
         result = await session.execute(select(User).where(User.email == data.email))
         user = result.scalar_one_or_none()
 
-        if not user or not bcrypt.verify(data.password, user.password_hash):
+        if not user or not bcrypt.checkpw(data.password.encode(), user.password_hash.encode()):
             raise HTTPException(status_code=401, detail="Invalid credentials")
 
         token = generate_token()
