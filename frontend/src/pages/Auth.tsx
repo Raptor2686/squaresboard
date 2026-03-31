@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-const API = import.meta.env.VITE_API_URL || "http://localhost:8000";
+const API = (import.meta.env.VITE_API_URL || "http://localhost:8000") + "/api";
 
 export default function Auth() {
   const [mode, setMode] = useState<"login" | "signup">("login");
@@ -15,14 +15,14 @@ export default function Auth() {
     setError("");
     setLoading(true);
 
-    const endpoint = mode === "signup" ? "/api/auth/signup" : "/api/auth/login";
+    const endpoint = mode === "signup" ? "auth/signup" : "auth/login";
     const body =
       mode === "signup"
         ? { email, password, display_name: displayName }
         : { email, password };
 
     try {
-      const res = await fetch(`${API}${endpoint}`, {
+      const res = await fetch(`${API}/${endpoint}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",

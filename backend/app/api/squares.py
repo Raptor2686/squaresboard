@@ -18,6 +18,7 @@ async def get_board_squares(board_id: str):
         result = await session.execute(
             select(Board)
             .options(joinedload(Board.game))
+            .options(joinedload(Board.winning_square))
             .where(Board.id == board_id)
         )
         board = result.scalar_one_or_none()

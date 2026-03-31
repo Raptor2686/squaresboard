@@ -30,7 +30,7 @@ interface BoardData {
 }
 
 function formatCents(c: number) {
-  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(c);
+  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(c / 100);
 }
 
 export default function BoardDetail() {
@@ -113,7 +113,7 @@ export default function BoardDetail() {
         }`}>
           {board_status.toUpperCase()}
         </span>
-        <span className="text-zinc-400 text-sm">{formatCents(price_tier)} per square</span>
+        <span className="text-zinc-400 text-sm">{formatCents(price_tier * 100)} per square</span>
       </div>
 
       {/* Square Grid */}

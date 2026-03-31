@@ -3,7 +3,7 @@ import httpx
 from datetime import datetime, timezone
 from sqlalchemy import select
 from app.database import async_session
-from app.models import Game, Board, Square, BoardStatus, GameStatus, Quarter, User, Transaction, Payout
+from app.models import Game, Board, Square, BoardStatus, GameStatus, Quarter, Transaction, User
 from app.services.payout import send_payout
 
 
@@ -101,6 +101,8 @@ async def resolve_board(board_id: str, home_score: int, away_score: int):
                 type="payout",
             )
             session.add(payout_tx)
+            # Create Payout audit record (idempotent)
+            await send_payout(winner.owner_id, payout_cents, board_id, winner.id)
 
         # Record house rake
         rake_tx = Transaction(

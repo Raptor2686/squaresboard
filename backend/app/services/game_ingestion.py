@@ -4,8 +4,9 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import select
 from app.database import async_session
 from app.models import Game, Board, Square, BoardStatus, Sport, Quarter
+from app.config import settings
 
-THESPORTSDB_BASE = "https://www.thesportsdb.com/api/v1/json/123"
+THESPORTSDB_BASE = "https://www.thesportsdb.com/api/v1/json"  # key appended per-request below
 
 PRICE_TIERS = [0.50, 1, 2, 5, 10, 20, 50, 100, 1000, 10000]
 
@@ -31,7 +32,7 @@ async def fetch_upcoming_games(sport: str, days_ahead: int = 7) -> list[dict]:
     try:
         async with httpx.AsyncClient() as client:
             resp = await client.get(
-                f"{THESPORTSDB_BASE}/eventsnextleague.php",
+                f"{THESPORTSDB_BASE}/{settings.THESPORTSDB_API_KEY}/eventsnextleague.php",
                 params={"id": league_id},
                 timeout=10.0,
             )

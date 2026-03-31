@@ -1,3 +1,10 @@
+# Render Build Command (set in Render dashboard → your service → Build Command):
+# pip install --force-reinstall --no-cache-dir python-version==3.12.0 && pip install --no-cache-dir -r requirements.txt
+#
+# IMPORTANT: Set Runtime to Python 3.12 in Render dashboard → Environment → Runtime
+# or add this to a post-install hook:
+# pip install 'pydantic>=2.0' --force-reinstall
+
 fastapi==0.115.0
 uvicorn[standard]==0.30.6
 sqlalchemy==2.0.35
