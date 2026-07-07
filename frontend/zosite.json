@@ -5,6 +5,6 @@
   "buildCommand": "npm install && npm run build",
   "publishDir": "dist",
   "env": {
-    "VITE_API_URL": "https://squaresboard-api.onrender.com/api"
+    "VITE_API_URL": "https://squaresboard.onrender.com"
   }
 }
