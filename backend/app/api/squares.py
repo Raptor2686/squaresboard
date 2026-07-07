@@ -2,6 +2,7 @@ import uuid
 import random
 from datetime import datetime
 from fastapi import APIRouter, HTTPException, Cookie
+from pydantic import BaseModel
 from typing import Annotated
 from sqlalchemy import select
 from sqlalchemy.orm import joinedload
@@ -18,7 +19,6 @@ async def get_board_squares(board_id: str):
         result = await session.execute(
             select(Board)
             .options(joinedload(Board.game))
-            .options(joinedload(Board.winning_square))
             .where(Board.id == board_id)
         )
         board = result.scalar_one_or_none()
@@ -42,11 +42,15 @@ async def get_board_squares(board_id: str):
                 "away_team_logo": board.game.away_team_logo,
                 "event_time": board.game.event_time.isoformat(),
                 "status": board.game.status,
+                "home_score": board.game.home_score,
+                "away_score": board.game.away_score,
             },
             "quarter": board.quarter,
             "price_tier": board.price_tier,
             "board_status": board.status,
-            "winning_number": board.winning_square.s.number if board.winning_square else None,
+            "is_private": board.is_private,
+            "share_link": board.share_link,
+            "winning_number": next((s.number for s in squares if s.id == board.winning_square_id), None),
             "squares": [
                 {
                     "id": s.id,
@@ -60,13 +64,18 @@ async def get_board_squares(board_id: str):
         }
 
 
+class PurchaseRequest(BaseModel):
+    position: int
+
+
 @router.post("/board/{board_id}/purchase")
 async def purchase_square(
     board_id: str,
-    position: int,
-    session: Annotated[str, Cookie()] = None,
+    req: PurchaseRequest,
+    session: Annotated[str, Cookie(alias="session")] = None,
 ):
     """Purchase a square using wallet balance."""
+    position = req.position
     user = await _get_user_from_token(session)
     if not user:
         raise HTTPException(status_code=401, detail="Not authenticated")
@@ -143,7 +152,7 @@ async def purchase_square(
 
 
 @router.get("/my-boards")
-async def get_my_boards(session: Annotated[str, Cookie()] = None):
+async def get_my_boards(session: Annotated[str, Cookie(alias="session")] = None):
     user = await _get_user_from_token(session)
     if not user:
         raise HTTPException(status_code=401, detail="Not authenticated")
@@ -170,6 +179,7 @@ async def get_my_boards(session: Annotated[str, Cookie()] = None):
                 "status": s.board.status,
                 "quarter": s.board.quarter,
                 "price_tier": s.board.price_tier,
+                "winning_square_id": s.board.winning_square_id,
                 "game": {
                     "id": s.board.game.id,
                     "home_team": s.board.game.home_team,
