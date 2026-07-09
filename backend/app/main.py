@@ -16,6 +16,7 @@ from app.api import (
     users,
     webhooks,
     wallet,
+    simulator,
 )
 from app.services import (
     game_ingestion,
@@ -47,7 +48,8 @@ app = FastAPI(
 ALLOWED_ORIGINS = [
     "http://localhost:5173",
     "https://localhost:5173",
-    "https://raptor2686.zo.space",
+    "http://localhost",
+    "capacitor://localhost",
     settings.FRONTEND_URL,
 ]
 
@@ -70,3 +72,4 @@ app.include_router(boards.router, prefix="/api/boards")
 app.include_router(squares.router, prefix="/api/squares")
 app.include_router(webhooks.router, prefix="/api/webhooks")
 app.include_router(wallet.router, prefix="/api/wallet")
+app.include_router(simulator.router, prefix="/api/simulator")

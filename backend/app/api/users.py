@@ -9,15 +9,15 @@ router = APIRouter()
 
 
 @router.get("/me")
-async def get_me(token: Annotated[str | None, Cookie()] = None):
+async def get_me(token: Annotated[str | None, Cookie(alias="session")] = None):
     user = await _get_user_from_token(token)
     if not user:
         raise HTTPException(status_code=401, detail="Not authenticated")
-    return {"user_id": user.id, "display_name": user.display_name, "email": user.email}
+    return {"id": user.id, "user_id": user.id, "display_name": user.display_name, "email": user.email}
 
 
 @router.get("/me/boards")
-async def get_my_boards(token: Annotated[str | None, Cookie()] = None):
+async def get_my_boards(token: Annotated[str | None, Cookie(alias="session")] = None):
     user = await _get_user_from_token(token)
     if not user:
         raise HTTPException(status_code=401, detail="Not authenticated")

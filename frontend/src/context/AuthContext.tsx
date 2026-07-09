@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import { API } from "../config";
 
 interface User {
   id: string;
@@ -24,14 +25,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const API = (import.meta.env.VITE_API_URL || "http://localhost:8000") + "/api";
-
   async function refresh() {
     try {
       const res = await fetch(`${API}/auth/me`, { credentials: "include" });
       if (res.ok) {
         const data = await res.json();
-        setUser(data);
+        setUser({
+          id: data.id || data.user_id,
+          email: data.email,
+          display_name: data.display_name,
+        });
       } else {
         setUser(null);
       }
@@ -45,7 +48,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   async function logout() {
     await fetch(`${API}/auth/logout`, { method: "POST", credentials: "include" });
     setUser(null);
-    window.location.href = "/";
+    window.location.hash = "#/";
   }
 
   useEffect(() => {

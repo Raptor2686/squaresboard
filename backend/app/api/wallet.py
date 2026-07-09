@@ -11,16 +11,16 @@ router = APIRouter()
 
 
 @router.get("/me")
-async def get_wallet(session: Annotated[str, Cookie()] = None):
-    user = await _get_user_from_token(session)
+async def get_wallet(token: Annotated[str | None, Cookie(alias="session")] = None):
+    user = await _get_user_from_token(token)
     if not user:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
-    async with async_session() as session:
-        result = await session.execute(select(User).where(User.id == user.id))
+    async with async_session() as db:
+        result = await db.execute(select(User).where(User.id == user.id))
         db_user = result.scalar_one_or_none()
 
-        tx_result = await session.execute(
+        tx_result = await db.execute(
             select(Transaction)
             .where(Transaction.user_id == user.id)
             .order_by(Transaction.created_at.desc())
@@ -48,35 +48,34 @@ async def get_wallet(session: Annotated[str, Cookie()] = None):
 @router.post("/deposit")
 async def create_deposit(
     amount_cents: int,
-    session: Annotated[str, Cookie()] = None,
+    token: Annotated[str | None, Cookie(alias="session")] = None,
 ):
     """Create a Stripe PaymentIntent for depositing funds."""
-    user = await _get_user_from_token(session)
+    user = await _get_user_from_token(token)
     if not user:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
     if amount_cents < 100:  # min $1
         raise HTTPException(status_code=400, detail="Minimum deposit is $1.00")
 
-    async with async_session() as session:
-        result = await session.execute(select(User).where(User.id == user.id))
+    async with async_session() as db:
+        result = await db.execute(select(User).where(User.id == user.id))
         db_user = result.scalar_one_or_none()
+
+        import stripe
+        from app.config import settings
+        stripe.api_key = settings.STRIPE_SECRET_KEY
 
         # Ensure Stripe customer exists
         if not db_user.stripe_customer_id:
-            import stripe
             customer = stripe.Customer.create(
                 email=db_user.email,
                 metadata={"user_id": db_user.id},
             )
             db_user.stripe_customer_id = customer.id
-            await session.commit()
+            await db.commit()
 
         # Create PaymentIntent for the deposit
-        import stripe
-        from app.config import settings
-        stripe.api_key = settings.STRIPE_SECRET_KEY
-
         intent = stripe.PaymentIntent.create(
             amount=amount_cents,
             currency="usd",
@@ -90,6 +89,7 @@ async def create_deposit(
 
     return {
         "client_secret": intent.client_secret,
+        "publishable_key": settings.STRIPE_PUBLISHABLE_KEY,
         "amount_cents": amount_cents,
     }
 
@@ -97,18 +97,18 @@ async def create_deposit(
 @router.post("/withdraw")
 async def request_withdrawal(
     amount_cents: int,
-    session: Annotated[str, Cookie()] = None,
+    token: Annotated[str | None, Cookie(alias="session")] = None,
 ):
     """Request a withdrawal. For MVP, we just record it and return instructions."""
-    user = await _get_user_from_token(session)
+    user = await _get_user_from_token(token)
     if not user:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
     if amount_cents < 100:
         raise HTTPException(status_code=400, detail="Minimum withdrawal is $1.00")
 
-    async with async_session() as session:
-        result = await session.execute(select(User).where(User.id == user.id))
+    async with async_session() as db:
+        result = await db.execute(select(User).where(User.id == user.id))
         db_user = result.scalar_one_or_none()
 
         if db_user.balance_cents < amount_cents:
@@ -127,11 +127,12 @@ async def request_withdrawal(
             type="withdrawal",
             reference_id=str(uuid.uuid4()),
         )
-        session.add(tx)
-        await session.commit()
+        db.add(tx)
+        await db.commit()
 
     return {
         "ok": True,
         "amount_cents": amount_cents,
         "message": "Withdrawal requested. Payouts to bank accounts coming soon.",
     }
+

@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime, timedelta
 from app.database import async_session, engine
 from app.models import Base, Game, Board, Square, Sport, Quarter, BoardStatus, GameStatus
-
+from sqlalchemy import select
 
 MOCK_GAMES = [
     # Football
@@ -63,6 +63,13 @@ async def seed():
 
     for gdata in MOCK_GAMES:
         async with async_session() as session:
+            existing = await session.execute(
+                select(Game).where(Game.external_id == gdata["external_id"])
+            )
+            if existing.scalar_one_or_none():
+                print(f"Skipping (already exists): {gdata['away_team']} @ {gdata['home_team']}")
+                continue
+
             sport = gdata["sport"]
             event_time = gdata["event_time"]
 

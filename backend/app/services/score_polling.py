@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 from app.database import async_session
 from app.models import Game, Board, Square, BoardStatus, GameStatus, Quarter, Transaction, User
+from app.config import settings
 from app.services.payout import send_payout
 
 
@@ -16,7 +17,7 @@ async def fetch_live_scores(external_id: str) -> tuple[int | None, int | None, b
     try:
         async with httpx.AsyncClient() as client:
             resp = await client.get(
-                "https://www.thesportsdb.com/api/v1/json/1/eventsummary.php",
+                f"https://www.thesportsdb.com/api/v1/json/{settings.THESPORTSDB_API_KEY}/eventsummary.php",
                 params={"id": external_id},
                 timeout=10.0,
             )
@@ -29,7 +30,8 @@ async def fetch_live_scores(external_id: str) -> tuple[int | None, int | None, b
             away = int(event.get("intAwayScore") or 0)
             # strStatus like "2nd Quarter", "Half", "Final", "Final/OT"
             status: str = event.get("strStatus", "")
-            is_final = "final" in status.lower()
+            status_lower = status.lower()
+            is_final = any(kw in status_lower for kw in ["final", "ft", "match finished", "aet", "game over", "completed"])
             return home, away, is_final
     except Exception as e:
         print(f"[score_polling] fetch failed for {external_id}: {e}")
@@ -155,7 +157,18 @@ async def poll_active_boards():
             await session.commit()
 
             current_quarter = get_quarter_from_time(game, now)
-            quarter_match = current_quarter and current_quarter.value == board_quarter.value
+            
+            quarter_order = {
+                Quarter.Q1: 1,
+                Quarter.Q2: 2,
+                Quarter.Q3: 3,
+                Quarter.Q4: 4,
+            }
+            
+            quarter_ended = (
+                current_quarter 
+                and quarter_order[current_quarter] > quarter_order[board_quarter]
+            )
 
-            if quarter_match or game.status == GameStatus.COMPLETED:
+            if quarter_ended or game.status == GameStatus.COMPLETED:
                 await resolve_board(board_id, home_score, away_score)

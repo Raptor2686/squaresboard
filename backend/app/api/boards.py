@@ -4,7 +4,7 @@ from typing import Annotated
 from sqlalchemy import select
 from sqlalchemy.orm import joinedload
 from app.database import async_session
-from app.models import Board, BoardStatus, Quarter, Game, Sport
+from app.models import Board, BoardStatus, Quarter, Game, Sport, Square
 from app.api.auth import _get_user_from_token
 
 router = APIRouter()
@@ -83,7 +83,7 @@ async def create_board(
     quarter: str,
     price_tier: float,
     is_private: bool = False,
-    token: Annotated[str | None, Cookie()] = None,
+    token: Annotated[str | None, Cookie(alias="session")] = None,
 ):
     user = await _get_user_from_token(token)
     if is_private and not user:
@@ -112,5 +112,16 @@ async def create_board(
             created_by=user.id if user else None,
         )
         session.add(board)
+        await session.flush()
+
+        # Pre-create 10 empty squares
+        for pos in range(10):
+            square = Square(
+                id=str(uuid.uuid4()),
+                board_id=board.id,
+                position=pos,
+            )
+            session.add(square)
+
         await session.commit()
         return {"id": board.id, "share_link": board.share_link}
