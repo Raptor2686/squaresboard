@@ -2,12 +2,13 @@ services:
   - type: web
     name: squaresboard-api
     runtime: python
-    pythonVersion: "3.12"
     rootDir: backend
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /
     envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.0
       - key: DATABASE_URL
         value: sqlite+aiosqlite:////var/data/squaresboard.db
       - key: STRIPE_SECRET_KEY
