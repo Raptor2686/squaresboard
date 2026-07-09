@@ -5,7 +5,7 @@ from sqlalchemy import select
 from app.database import async_session
 from app.models import Payout
 
-async def send_payout(winner_user_id: str, amount_cents: int, board_id: str, square_id: str):
+async def send_payout(winner_user_id: str, amount_cents: int, board_id: str, square_id: str, db_session = None):
     """
     Record a Payout audit row for the winner.
     Balance credit and Transaction record are created by resolve_board — not here.
@@ -15,7 +15,7 @@ async def send_payout(winner_user_id: str, amount_cents: int, board_id: str, squ
 
     stripe.api_key = settings.STRIPE_SECRET_KEY
 
-    async with async_session() as session:
+    async def _run(session):
         # Idempotency guard — skip if already recorded
         existing = await session.execute(
             select(Payout).where(Payout.square_id == square_id)
@@ -30,5 +30,12 @@ async def send_payout(winner_user_id: str, amount_cents: int, board_id: str, squ
             status="pending",
         )
         session.add(payout_record)
-        await session.commit()
-        print(f"[payout] Recorded {amount_cents} cents for square {square_id}")
+
+    if db_session:
+        await _run(db_session)
+    else:
+        async with async_session() as session:
+            await _run(session)
+            await session.commit()
+            print(f"[payout] Recorded {amount_cents} cents for square {square_id}")
+

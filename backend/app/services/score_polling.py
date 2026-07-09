@@ -45,6 +45,9 @@ def determine_winning_number(home_score: int, away_score: int) -> int:
 
 def get_quarter_from_time(game: Game, now: datetime) -> Quarter | None:
     """Determine which quarter the game is currently in based on wall-clock time."""
+    # Normalize now to timezone-naive UTC for SQLite compatibility
+    if now.tzinfo is not None:
+        now = now.replace(tzinfo=None)
     if now < game.q1_start:
         return None  # hasn't started
     if game.q1_start <= now < (game.q2_start or game.q1_start):
@@ -103,8 +106,8 @@ async def resolve_board(board_id: str, home_score: int, away_score: int):
                 type="payout",
             )
             session.add(payout_tx)
-            # Create Payout audit record (idempotent)
-            await send_payout(winner.owner_id, payout_cents, board_id, winner.id)
+            # Create Payout audit record (idempotent, sharing same session/transaction)
+            await send_payout(winner.owner_id, payout_cents, board_id, winner.id, db_session=session)
 
         # Record house rake
         rake_tx = Transaction(
@@ -154,8 +157,7 @@ async def poll_active_boards():
             elif game.status == GameStatus.UPCOMING:
                 game.status = GameStatus.LIVE
 
-            await session.commit()
-
+            # Calculate quarter end status BEFORE session commit & close
             current_quarter = get_quarter_from_time(game, now)
             
             quarter_order = {
@@ -169,6 +171,11 @@ async def poll_active_boards():
                 current_quarter 
                 and quarter_order[current_quarter] > quarter_order[board_quarter]
             )
+            
+            game_status = game.status
 
-            if quarter_ended or game.status == GameStatus.COMPLETED:
+            await session.commit()
+
+            if quarter_ended or game_status == GameStatus.COMPLETED:
                 await resolve_board(board_id, home_score, away_score)
+
