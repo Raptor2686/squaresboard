@@ -36,15 +36,23 @@ def _run_migrations():
     Runs on every startup — skips steps that are already applied.
     """
     db_url = settings.DATABASE_URL or ""
-    # Extract the file path from sqlite+aiosqlite:///./path or ////abs/path
+    # Extract the file path from sqlite+aiosqlite URLs:
+    #   sqlite+aiosqlite:////var/data/squaresboard.db  → /var/data/squaresboard.db  (4 slashes = absolute)
+    #   sqlite+aiosqlite:///./squaresboard.db          → ./squaresboard.db           (3 slashes = relative)
     if "sqlite" not in db_url:
         print("[migrate] Non-SQLite DB detected, skipping SQLite migration.")
         return
 
-    db_path = db_url.split("///")[-1].lstrip("/")
-    # Handle absolute paths (////var/data/...) vs relative (./squaresboard.db)
-    if db_url.count("///") >= 2 and not db_path.startswith("."):
-        db_path = "/" + db_path
+    # Split off everything after the scheme colon
+    path_part = db_url.split(":", 1)[-1]          # e.g. ////var/data/squaresboard.db
+    if path_part.startswith("////"):
+        db_path = path_part[3:]                    # strip 3 slashes → /var/data/squaresboard.db
+    elif path_part.startswith("///"):
+        db_path = path_part[3:]                    # strip 3 slashes → ./squaresboard.db
+    else:
+        db_path = path_part
+
+    print(f"[migrate] Resolved DB path: {db_path}")
 
     if not os.path.exists(db_path):
         print(f"[migrate] DB not found at {db_path} — will be created by init_db(). Skipping migration.")
