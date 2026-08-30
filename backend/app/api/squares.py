@@ -32,6 +32,11 @@ async def get_board_squares(board_id: str):
             .order_by(Square.position)
         )
         squares = squares_result.scalars().all()
+
+        # Payout is 90% of total GC pot, converted to SC (1 GC = 1 SC for simplicity)
+        total_pot_gc = board.price_tier * 10  # 10 squares
+        payout_sc = int(total_pot_gc * 0.90)
+
         return {
             "board_id": board.id,
             "game": {
@@ -46,7 +51,9 @@ async def get_board_squares(board_id: str):
                 "away_score": board.game.away_score,
             },
             "quarter": board.quarter,
-            "price_tier": board.price_tier,
+            "price_tier_gc": board.price_tier,
+            "entry_currency": board.entry_currency,
+            "payout_sc": payout_sc,
             "board_status": board.status,
             "is_private": board.is_private,
             "share_link": board.share_link,
@@ -74,14 +81,13 @@ async def purchase_square(
     req: PurchaseRequest,
     session: Annotated[str, Cookie(alias="session")] = None,
 ):
-    """Purchase a square using wallet balance."""
+    """Purchase a square using Gold Coins from the user's wallet."""
     position = req.position
     user = await _get_user_from_token(session)
     if not user:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
     async with async_session() as db:
-        # Load board with game
         result = await db.execute(
             select(Board)
             .options(joinedload(Board.game))
@@ -93,7 +99,6 @@ async def purchase_square(
         if board.status != BoardStatus.OPEN:
             raise HTTPException(status_code=400, detail="Board is not open for purchases")
 
-        # Check square
         square_result = await db.execute(
             select(Square).where(Square.board_id == board_id, Square.position == position)
         )
@@ -103,32 +108,50 @@ async def purchase_square(
         if square.owner_id is not None:
             raise HTTPException(status_code=400, detail="Square already taken")
 
-        # Check balance
+        # Load user and check balance for the board's entry currency
         user_result = await db.execute(select(User).where(User.id == user.id))
         db_user = user_result.scalar_one_or_none()
 
-        price_cents = int(board.price_tier * 100)
-        if db_user.balance_cents < price_cents:
-            raise HTTPException(status_code=400, detail=f"Insufficient balance. Need ${board.price_tier:.2f}")
+        entry_currency = board.entry_currency  # "GC" or "SC"
+        cost = board.price_tier
 
-        # Deduct balance
-        db_user.balance_cents -= price_cents
-
-        # Record transaction
-        tx = Transaction(
-            id=str(uuid.uuid4()),
-            user_id=user.id,
-            amount_cents=-price_cents,
-            type="purchase",
-            reference_id=board_id,
-        )
+        if entry_currency == "SC":
+            if db_user.sweep_coins < cost:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Insufficient Sweepstakes Coins. Need {cost:,} SC, you have {db_user.sweep_coins:,} SC."
+                )
+            db_user.sweep_coins -= cost
+            tx = Transaction(
+                id=str(uuid.uuid4()),
+                user_id=user.id,
+                amount=-cost,
+                type="sc_spend",
+                currency="SC",
+                reference_id=board_id,
+            )
+        else:  # default GC
+            if db_user.gold_coins < cost:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Insufficient Gold Coins. Need {cost:,} GC, you have {db_user.gold_coins:,} GC."
+                )
+            db_user.gold_coins -= cost
+            tx = Transaction(
+                id=str(uuid.uuid4()),
+                user_id=user.id,
+                amount=-cost,
+                type="gc_spend",
+                currency="GC",
+                reference_id=board_id,
+            )
         db.add(tx)
 
         # Assign square
         square.owner_id = user.id
         square.purchased_at = datetime.utcnow()
 
-        # Check if board is now full
+        # Check if board is now full — assign numbers and lock
         all_squares_result = await db.execute(
             select(Square).where(Square.board_id == board_id)
         )
@@ -146,8 +169,10 @@ async def purchase_square(
     return {
         "ok": True,
         "board_status": board.status,
-        "price_charged_cents": price_cents,
-        "new_balance_cents": db_user.balance_cents,
+        "entry_currency": entry_currency,
+        "cost_charged": cost,
+        "new_gold_coins": db_user.gold_coins,
+        "new_sweep_coins": db_user.sweep_coins,
     }
 
 
@@ -178,7 +203,8 @@ async def get_my_boards(session: Annotated[str, Cookie(alias="session")] = None)
                 "id": s.board.id,
                 "status": s.board.status,
                 "quarter": s.board.quarter,
-                "price_tier": s.board.price_tier,
+                "price_tier_gc": s.board.price_tier,
+                "payout_sc": int(s.board.price_tier * 10 * 0.90),
                 "winning_square_id": s.board.winning_square_id,
                 "game": {
                     "id": s.board.game.id,

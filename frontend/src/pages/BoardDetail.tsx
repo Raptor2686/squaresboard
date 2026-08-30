@@ -15,7 +15,9 @@ interface Square {
 interface BoardData {
   board_id: string;
   board_status: string;
-  price_tier: number;
+  price_tier_gc: number;
+  entry_currency: string;   // "GC" or "SC"
+  payout_sc: number;
   quarter: string;
   is_private: boolean;
   share_link: string | null;
@@ -32,8 +34,8 @@ interface BoardData {
   squares: Square[];
 }
 
-function formatCents(c: number) {
-  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(c / 100);
+function formatCoins(n: number, currency: string) {
+  return `${n.toLocaleString()} ${currency === "SC" ? "🎟️ SC" : "🟡 GC"}`;
 }
 
 export default function BoardDetail() {
@@ -41,6 +43,7 @@ export default function BoardDetail() {
   const { user } = useAuth();
   const { showToast } = useToast();
   const [board, setBoard] = useState<BoardData | null>(null);
+  const [walletBalance, setWalletBalance] = useState<{ gold_coins: number; sweep_coins: number } | null>(null);
   const [loading, setLoading] = useState(true);
   const [purchasing, setPurchasing] = useState<number | null>(null);
   const [error, setError] = useState("");
@@ -59,9 +62,24 @@ export default function BoardDetail() {
     }
   }
 
+  async function loadWallet() {
+    if (!user) return;
+    try {
+      const res = await fetch(`${API}/wallet/me`, { credentials: "include" });
+      if (res.ok) {
+        const data = await res.json();
+        setWalletBalance({ gold_coins: data.gold_coins, sweep_coins: data.sweep_coins });
+      }
+    } catch {}
+  }
+
   useEffect(() => {
     loadBoard();
   }, [boardId]);
+
+  useEffect(() => {
+    loadWallet();
+  }, [user]);
 
   async function handleBuySquare(position: number) {
     if (!user) { window.location.hash = "#/auth"; return; }
@@ -83,24 +101,32 @@ export default function BoardDetail() {
         showToast(msg, "error");
         return;
       }
-      showToast(`Square claimed! Position ${position + 1} is yours. 🎉`, "success");
-      await loadBoard(); // refresh board state
 
-      // Check if the board just filled (all 10 squares now owned)
+      // Update local wallet balance from response
+      if (data.new_gold_coins !== undefined || data.new_sweep_coins !== undefined) {
+        setWalletBalance({
+          gold_coins: data.new_gold_coins ?? walletBalance?.gold_coins ?? 0,
+          sweep_coins: data.new_sweep_coins ?? walletBalance?.sweep_coins ?? 0,
+        });
+      }
+
+      showToast(`Square claimed! Position ${position + 1} is yours. 🎉`, "success");
+      await loadBoard();
+
+      // Check if the board just filled
       const refreshed = await fetch(`${API}/squares/board/${boardId}`, { credentials: "include" });
       if (refreshed.ok) {
         const refreshedData: BoardData = await refreshed.json();
         if (refreshedData.board_status === "locked") {
           showToast("Board is full! Numbers have been assigned. 🔒", "info");
         }
-        // Check if just resolved and user won
         if (refreshedData.board_status === "resolved") {
           const winSquare = refreshedData.squares.find(
             (s) => s.number !== null && s.number === refreshedData.winning_number
           );
           if (winSquare?.owner_id === user.id) {
             showToast(
-              `You won! 🏆 ${formatCents(refreshedData.price_tier * 900)} has been credited to your wallet!`,
+              `You won! 🏆 ${refreshedData.payout_sc.toLocaleString()} SC has been credited to your wallet!`,
               "win"
             );
           }
@@ -134,13 +160,21 @@ export default function BoardDetail() {
   if (error && !board) return <div className="p-8 text-center text-red-400">{error}</div>;
   if (!board) return null;
 
-  const { board_status, squares, game, price_tier, quarter, is_private, winning_number } = board;
+  const { board_status, squares, game, price_tier_gc, entry_currency, payout_sc, quarter, is_private, winning_number } = board;
+  const isScBoard = entry_currency === "SC";
   const winningSquare = squares.find((s) => s.number !== null && s.number === winning_number);
   const userWon = winningSquare?.owner_id === user?.id;
   const filledCount = squares.filter((s) => s.owner_id).length;
 
+  // Relevant balance for this board's currency
+  const relevantBalance = isScBoard
+    ? walletBalance?.sweep_coins
+    : walletBalance?.gold_coins;
+  const canAfford = relevantBalance === undefined || relevantBalance >= price_tier_gc;
+
   return (
     <div className="max-w-2xl mx-auto p-6 space-y-6">
+
       {/* Game info header */}
       <div className="bg-zinc-800/40 border border-zinc-700/60 rounded-2xl p-6 flex flex-col md:flex-row items-center justify-between gap-4">
         <div>
@@ -160,6 +194,40 @@ export default function BoardDetail() {
           </span>
         </div>
       </div>
+
+      {/* Wallet balance for this board's currency */}
+      {user && walletBalance !== null && (
+        <div className={`flex items-center justify-between rounded-2xl px-5 py-3 border ${
+          isScBoard
+            ? "bg-purple-950/30 border-purple-800/40"
+            : "bg-yellow-950/30 border-yellow-800/40"
+        }`}>
+          <div className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">
+            Your {isScBoard ? "Sweepstakes Coins" : "Gold Coins"}
+          </div>
+          <div className={`font-mono font-extrabold text-lg ${isScBoard ? "text-purple-300" : "text-yellow-400"}`}>
+            {isScBoard
+              ? `${walletBalance.sweep_coins.toLocaleString()} 🎟️`
+              : `${walletBalance.gold_coins.toLocaleString()} 🟡`}
+          </div>
+        </div>
+      )}
+
+      {/* Not enough coins warning */}
+      {user && !canAfford && board_status === "open" && (
+        <div className={`rounded-xl px-4 py-3 text-sm border ${
+          isScBoard
+            ? "bg-purple-950/40 border-purple-700/60 text-purple-300"
+            : "bg-yellow-950/40 border-yellow-700/60 text-yellow-300"
+        }`}>
+          ⚠️ You need {formatCoins(price_tier_gc, entry_currency)} to buy a square.{" "}
+          {isScBoard ? (
+            <Link to="/wallet" className="underline font-semibold">Claim free SC or buy GC to earn SC →</Link>
+          ) : (
+            <Link to="/wallet" className="underline font-semibold">Buy Gold Coins →</Link>
+          )}
+        </div>
+      )}
 
       {/* Private board share banner */}
       {is_private && (
@@ -204,7 +272,7 @@ export default function BoardDetail() {
                 {userWon ? "YOU" : winningSquare.owner_name}
               </span>{" "}
               takes home{" "}
-              <span className="font-extrabold text-green-400">{formatCents(price_tier * 900)}</span>!
+              <span className="font-extrabold text-purple-300">{payout_sc.toLocaleString()} 🎟️ SC</span>!
             </p>
           </div>
           <div className="pt-2">
@@ -241,8 +309,13 @@ export default function BoardDetail() {
                 : "Board cancelled"}
             </span>
           </div>
-          <span className="bg-green-950 text-green-400 border border-green-800/40 text-xs font-bold px-3 py-1 rounded-xl">
-            {formatCents(price_tier * 100)} / sq
+          {/* Entry cost badge — currency-aware */}
+          <span className={`text-xs font-bold px-3 py-1 rounded-xl border ${
+            isScBoard
+              ? "bg-purple-950 text-purple-300 border-purple-800/40"
+              : "bg-yellow-950 text-yellow-400 border-yellow-800/40"
+          }`}>
+            {formatCoins(price_tier_gc, entry_currency)} / sq
           </span>
         </div>
 
@@ -284,7 +357,9 @@ export default function BoardDetail() {
                       : isOwned
                       ? "border-green-500 bg-green-950/70 shadow-lg shadow-green-950/10"
                       : isAvailable
-                      ? "border-blue-500/50 bg-blue-950/20 hover:bg-blue-900/30 cursor-pointer hover:border-blue-400 hover:scale-[1.03]"
+                      ? isScBoard
+                        ? "border-purple-500/50 bg-purple-950/20 hover:bg-purple-900/30 cursor-pointer hover:border-purple-400 hover:scale-[1.03]"
+                        : "border-blue-500/50 bg-blue-950/20 hover:bg-blue-900/30 cursor-pointer hover:border-blue-400 hover:scale-[1.03]"
                       : "border-zinc-700/60 bg-zinc-800/50 opacity-60 cursor-default"
                   }
                 `}
@@ -348,8 +423,8 @@ export default function BoardDetail() {
       {board_status === "open" && (
         <div className="bg-zinc-800/30 border border-zinc-800 rounded-xl p-4 text-center text-xs text-zinc-500">
           <span className="font-semibold text-zinc-300">Potential payout: </span>
-          <span className="text-green-400 font-bold font-mono">{formatCents(price_tier * 900)}</span>
-          <span className="ml-2">(9× the square price — platform keeps 1×)</span>
+          <span className="text-purple-300 font-bold font-mono">{payout_sc.toLocaleString()} 🎟️ SC</span>
+          <span className="ml-2">(90% of the total pot — platform keeps 10%)</span>
         </div>
       )}
     </div>

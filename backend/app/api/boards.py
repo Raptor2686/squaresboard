@@ -14,7 +14,7 @@ router = APIRouter()
 async def list_boards(
     sport: str | None = None,
     quarter: str | None = None,
-    price_tier: float | None = None,
+    price_tier: int | None = None,
     status: str | None = None,
     limit: int = Query(default=50, le=200),
     offset: int = 0,
@@ -42,9 +42,13 @@ async def list_boards(
                 "game_id": b.game_id,
                 "home_team": b.game.home_team,
                 "away_team": b.game.away_team,
+                "home_team_logo": b.game.home_team_logo,
+                "away_team_logo": b.game.away_team_logo,
                 "sport": b.game.sport.value,
                 "quarter": b.quarter.value,
-                "price_tier": b.price_tier,
+                "price_tier_gc": b.price_tier,
+                "entry_currency": b.entry_currency,
+                "payout_sc": int(b.price_tier * 10 * 0.90),
                 "status": b.status.value,
                 "is_private": b.is_private,
                 "created_at": b.created_at.isoformat(),
@@ -69,7 +73,9 @@ async def get_board(board_id: str):
             "away_team": board.game.away_team,
             "sport": board.game.sport.value,
             "quarter": board.quarter.value,
-            "price_tier": board.price_tier,
+            "price_tier_gc": board.price_tier,
+            "entry_currency": board.entry_currency,
+            "payout_sc": int(board.price_tier * 10 * 0.90),
             "status": board.status.value,
             "is_private": board.is_private,
             "share_link": board.share_link,
@@ -77,11 +83,14 @@ async def get_board(board_id: str):
         }
 
 
+# Valid Gold Coin price tiers per square
+VALID_GC_TIERS = [50, 100, 250, 500, 1000, 2500]
+
 @router.post("/")
 async def create_board(
     game_id: str,
     quarter: str,
-    price_tier: float,
+    price_tier: int,
     is_private: bool = False,
     token: Annotated[str | None, Cookie(alias="session")] = None,
 ):
@@ -91,8 +100,8 @@ async def create_board(
 
     if quarter not in [q.value for q in Quarter]:
         raise HTTPException(status_code=400, detail="Invalid quarter")
-    if price_tier not in [0.50, 1, 2, 5, 10, 20, 50, 100, 1000, 10000]:
-        raise HTTPException(status_code=400, detail="Invalid price tier")
+    if price_tier not in VALID_GC_TIERS:
+        raise HTTPException(status_code=400, detail=f"Invalid price tier. Choose from: {VALID_GC_TIERS}")
 
     async with async_session() as session:
         game_result = await session.execute(select(Game).where(Game.id == game_id))

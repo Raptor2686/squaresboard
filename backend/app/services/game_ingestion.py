@@ -8,7 +8,7 @@ from app.config import settings
 
 THESPORTSDB_BASE = "https://www.thesportsdb.com/api/v1/json"  # key appended per-request below
 
-PRICE_TIERS = [0.50, 1, 2, 5, 10, 20, 50, 100, 1000, 10000]
+GC_TIERS = [50, 100, 250, 500, 1000, 2500]
 
 SPORT_LEAGUE_IDS = {
     "football": "4391",
@@ -103,7 +103,7 @@ async def run():
 
                 # Auto-create one board per quarter per price tier
                 for quarter in Quarter:
-                    for price in PRICE_TIERS:
+                    for price in GC_TIERS:
                         board = Board(
                             id=str(uuid.uuid4()),
                             game_id=game.id,

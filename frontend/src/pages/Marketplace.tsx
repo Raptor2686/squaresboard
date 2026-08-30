@@ -3,7 +3,8 @@ import { Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { API } from "../config";
 
-const PRICE_TIERS = [0.50, 1, 2, 5, 10, 20, 50, 100, 1000, 10000];
+const GC_TIERS = [50, 100, 250, 500, 1000, 2500];
+const SC_TIERS = [10, 25, 50, 100, 250];
 const QUARTERS = ["Q1", "Q2", "Q3", "Q4"];
 const SPORTS = ["football", "basketball", "baseball"];
 
@@ -30,8 +31,15 @@ interface Board {
   id: string;
   game_id: string;
   quarter: string;
-  price_tier: number;
+  price_tier_gc: number;
+  entry_currency: string;
+  payout_sc: number;
   status: string;
+  home_team: string;
+  away_team: string;
+  home_team_logo?: string;
+  away_team_logo?: string;
+  sport: string;
 }
 
 function HowItWorksStep({ number, title, description }: { number: number; title: string; description: string }) {
@@ -53,6 +61,7 @@ export default function Marketplace() {
   const [sport, setSport] = useState<string>("");
   const [quarter, setQuarter] = useState<string>("");
   const [price, setPrice] = useState<number>(0);
+  const [currency, setCurrency] = useState<"GC" | "SC">("GC");
   const [games, setGames] = useState<Game[]>([]);
   const [boards, setBoards] = useState<Board[]>([]);
   const [loading, setLoading] = useState(true);
@@ -76,7 +85,9 @@ export default function Marketplace() {
       .catch(() => setLoading(false));
   }, [sport, quarter, price]);
 
-  const openBoards = boards.filter((b) => b.status === "open" || b.status === "locked");
+  const openBoards = boards
+    .filter((b) => b.status === "open" || b.status === "locked")
+    .filter((b) => b.entry_currency === currency);
 
   return (
     <div className="max-w-6xl mx-auto p-6 space-y-10">
@@ -97,15 +108,16 @@ export default function Marketplace() {
             </span>
             <h1 className="text-3xl md:text-5xl font-black tracking-tight text-white leading-tight">
               Pick Your Square.<br />
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-400">
-                Win Real Money.
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-amber-400">
+                Win Sweepstakes Coins.
               </span>
             </h1>
             <p className="text-zinc-400 text-sm leading-relaxed max-w-md">
-              Buy a square on any sports board. When the quarter ends, the correct score
-              intersection wins <span className="text-green-400 font-semibold">9× the buy-in</span>.
+              Use 🟡 Gold Coins to enter any board. When the quarter ends, the correct score
+              intersection wins <span className="text-purple-300 font-semibold">Sweepstakes Coins</span> you can redeem for prizes.
               NFL · NBA · MLB · NCAA
             </p>
+            <p className="text-xs text-zinc-500">No Purchase Necessary. See <a href="#/rules" className="text-blue-400 underline">Official Rules</a>.</p>
             <div className="flex flex-wrap gap-3 pt-2">
               {user ? (
                 <>
@@ -231,40 +243,66 @@ export default function Marketplace() {
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
           <h2 className="text-2xl font-extrabold text-white tracking-tight">Active Pools</h2>
 
-          {/* Filters */}
-          <div className="flex flex-wrap gap-3">
-            <select
-              className="bg-zinc-800/90 border border-zinc-700 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-blue-500 transition-all cursor-pointer"
-              value={sport}
-              onChange={(e) => setSport(e.target.value)}
-            >
-              <option value="">All Sports</option>
-              {SPORTS.map((s) => (
-                <option key={s} value={s}>
-                  {SPORT_EMOJI[s]} {s.charAt(0).toUpperCase() + s.slice(1)}
-                </option>
-              ))}
-            </select>
-            <select
-              className="bg-zinc-800/90 border border-zinc-700 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-blue-500 transition-all cursor-pointer"
-              value={quarter}
-              onChange={(e) => setQuarter(e.target.value)}
-            >
-              <option value="">All Quarters</option>
-              {QUARTERS.map((q) => (
-                <option key={q} value={q}>{q}</option>
-              ))}
-            </select>
-            <select
-              className="bg-zinc-800/90 border border-zinc-700 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-blue-500 transition-all cursor-pointer"
-              value={price || ""}
-              onChange={(e) => setPrice(Number(e.target.value))}
-            >
-              <option value="">All Prices</option>
-              {PRICE_TIERS.map((p) => (
-                <option key={p} value={p}>${p}</option>
-              ))}
-            </select>
+          <div className="flex flex-wrap gap-3 items-center">
+            {/* Currency toggle */}
+            <div className="flex rounded-xl overflow-hidden border border-zinc-700 text-sm font-semibold">
+              <button
+                onClick={() => { setCurrency("GC"); setPrice(0); }}
+                className={`px-4 py-2 transition-all ${
+                  currency === "GC"
+                    ? "bg-yellow-500 text-black"
+                    : "bg-zinc-800 text-zinc-400 hover:text-white"
+                }`}
+              >
+                🟡 GC Boards
+              </button>
+              <button
+                onClick={() => { setCurrency("SC"); setPrice(0); }}
+                className={`px-4 py-2 transition-all ${
+                  currency === "SC"
+                    ? "bg-purple-600 text-white"
+                    : "bg-zinc-800 text-zinc-400 hover:text-white"
+                }`}
+              >
+                🎟️ SC Boards
+              </button>
+            </div>
+
+            {/* Filters */}
+            <div className="flex flex-wrap gap-3">
+              <select
+                className="bg-zinc-800/90 border border-zinc-700 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-blue-500 transition-all cursor-pointer"
+                value={sport}
+                onChange={(e) => setSport(e.target.value)}
+              >
+                <option value="">All Sports</option>
+                {SPORTS.map((s) => (
+                  <option key={s} value={s}>
+                    {SPORT_EMOJI[s]} {s.charAt(0).toUpperCase() + s.slice(1)}
+                  </option>
+                ))}
+              </select>
+              <select
+                className="bg-zinc-800/90 border border-zinc-700 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-blue-500 transition-all cursor-pointer"
+                value={quarter}
+                onChange={(e) => setQuarter(e.target.value)}
+              >
+                <option value="">All Quarters</option>
+                {QUARTERS.map((q) => (
+                  <option key={q} value={q}>{q}</option>
+                ))}
+              </select>
+              <select
+                className="bg-zinc-800/90 border border-zinc-700 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-blue-500 transition-all cursor-pointer"
+                value={price || ""}
+                onChange={(e) => setPrice(Number(e.target.value))}
+              >
+                <option value="">All Prices</option>
+                {(currency === "GC" ? GC_TIERS : SC_TIERS).map((p) => (
+                  <option key={p} value={p}>{p.toLocaleString()} {currency}</option>
+                ))}
+              </select>
+            </div>
           </div>
         </div>
 
@@ -300,7 +338,7 @@ export default function Marketplace() {
             {openBoards.map((board) => {
               const game = games.find((g) => g.id === board.game_id);
               const isLocked = board.status === "locked";
-              const sportEmoji = game ? SPORT_EMOJI[game.sport] ?? "🏟️" : "🏟️";
+              const sportEmoji = SPORT_EMOJI[board.sport] ?? "🏟️";
 
               return (
                 <Link
@@ -329,34 +367,28 @@ export default function Marketplace() {
                   <div className="space-y-3 mb-4">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        {game?.away_team_logo ? (
-                          <img src={game.away_team_logo} className="w-6 h-6 rounded-full object-cover" alt="" />
+                        {board.away_team_logo ? (
+                          <img src={board.away_team_logo} className="w-6 h-6 rounded-full object-cover" alt="" />
                         ) : (
                           <div className="w-6 h-6 rounded-full bg-zinc-700 text-center text-[10px] leading-6 text-zinc-500">A</div>
                         )}
                         <span className="font-semibold text-zinc-100 group-hover:text-white transition-colors text-sm">
-                          {game?.away_team ?? "Loading..."}
+                          {board.away_team}
                         </span>
                       </div>
-                      <span className="text-zinc-500 font-mono text-sm">
-                        {game && game.away_score !== null && game.away_score !== undefined ? game.away_score : ""}
-                      </span>
                     </div>
 
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        {game?.home_team_logo ? (
-                          <img src={game.home_team_logo} className="w-6 h-6 rounded-full object-cover" alt="" />
+                        {board.home_team_logo ? (
+                          <img src={board.home_team_logo} className="w-6 h-6 rounded-full object-cover" alt="" />
                         ) : (
                           <div className="w-6 h-6 rounded-full bg-zinc-700 text-center text-[10px] leading-6 text-zinc-500">H</div>
                         )}
                         <span className="font-semibold text-zinc-100 group-hover:text-white transition-colors text-sm">
-                          {game?.home_team ?? "..."}
+                          {board.home_team}
                         </span>
                       </div>
-                      <span className="text-zinc-500 font-mono text-sm">
-                        {game && game.home_score !== null && game.home_score !== undefined ? game.home_score : ""}
-                      </span>
                     </div>
                   </div>
 
@@ -366,10 +398,19 @@ export default function Marketplace() {
                     </div>
                     <div className="text-right">
                       <span className="block text-[10px] text-zinc-500 uppercase tracking-wider font-semibold">
-                        {user ? "Price / Square" : "From"}
+                        Entry
                       </span>
-                      <span className="text-green-400 font-mono font-extrabold text-lg">
-                        ${board.price_tier}
+                      {board.entry_currency === "SC" ? (
+                        <span className="text-purple-300 font-mono font-extrabold text-lg">
+                          {board.price_tier_gc.toLocaleString()} 🎟️
+                        </span>
+                      ) : (
+                        <span className="text-yellow-400 font-mono font-extrabold text-lg">
+                          {board.price_tier_gc.toLocaleString()} 🟡
+                        </span>
+                      )}
+                      <span className="block text-[10px] text-purple-400 font-semibold">
+                        Win up to {board.payout_sc.toLocaleString()} 🎟️ SC
                       </span>
                     </div>
                   </div>

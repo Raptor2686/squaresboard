@@ -1,35 +1,51 @@
 import uuid
-import stripe
-from app.config import settings
 from sqlalchemy import select
 from app.database import async_session
-from app.models import Payout
+from app.models import SweepReward, User, Transaction
 
-async def send_payout(winner_user_id: str, amount_cents: int, board_id: str, square_id: str, db_session = None):
-    """
-    Record a Payout audit row for the winner.
-    Balance credit and Transaction record are created by resolve_board — not here.
-    """
-    if not settings.STRIPE_SECRET_KEY:
-        return
 
-    stripe.api_key = settings.STRIPE_SECRET_KEY
+async def award_sweep_coins(winner_user_id: str, sweep_coins: int, board_id: str, square_id: str, db_session=None):
+    """
+    Credit Sweepstakes Coins to a winning square's owner.
+    Called by score_polling when a board is resolved.
+    """
 
     async def _run(session):
-        # Idempotency guard — skip if already recorded
+        # Idempotency guard
         existing = await session.execute(
-            select(Payout).where(Payout.square_id == square_id)
+            select(SweepReward).where(SweepReward.square_id == square_id)
         )
         if existing.scalar_one_or_none():
             return
 
-        payout_record = Payout(
+        # Create reward record
+        reward = SweepReward(
             id=str(uuid.uuid4()),
             square_id=square_id,
-            amount_cents=amount_cents,
-            status="pending",
+            sweep_coins_awarded=sweep_coins,
+            status="credited",
         )
-        session.add(payout_record)
+        session.add(reward)
+
+        # Credit user's SC balance
+        user_result = await session.execute(select(User).where(User.id == winner_user_id))
+        db_user = user_result.scalar_one_or_none()
+        if db_user:
+            db_user.sweep_coins += sweep_coins
+
+        # Ledger entry
+        tx = Transaction(
+            id=str(uuid.uuid4()),
+            user_id=winner_user_id,
+            board_id=board_id,
+            amount=sweep_coins,
+            type="sc_earn",
+            currency="SC",
+            reference_id=square_id,
+        )
+        session.add(tx)
+
+        print(f"[payout] Awarded {sweep_coins} SC to user={winner_user_id} for square={square_id}")
 
     if db_session:
         await _run(db_session)
@@ -37,5 +53,3 @@ async def send_payout(winner_user_id: str, amount_cents: int, board_id: str, squ
         async with async_session() as session:
             await _run(session)
             await session.commit()
-            print(f"[payout] Recorded {amount_cents} cents for square {square_id}")
-

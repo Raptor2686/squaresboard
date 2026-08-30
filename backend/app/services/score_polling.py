@@ -5,7 +5,7 @@ from sqlalchemy import select
 from app.database import async_session
 from app.models import Game, Board, Square, BoardStatus, GameStatus, Quarter, Transaction, User
 from app.config import settings
-from app.services.payout import send_payout
+from app.services.payout import award_sweep_coins
 
 
 async def fetch_live_scores(external_id: str) -> tuple[int | None, int | None, bool]:
@@ -85,37 +85,22 @@ async def resolve_board(board_id: str, home_score: int, away_score: int):
         board.status = BoardStatus.RESOLVED
         board.winning_square_id = winner.id if winner else None
 
-        price_cents = int(board.price_tier * 100)
-        payout_cents = price_cents * 9   # 90% to winner
-        rake_cents = price_cents * 1     # 10% to house
+        # Sweepstakes: 90% of GC pot → SC for winner, 10% is house
+        total_gc_pot = board.price_tier * 10
+        payout_sc = int(total_gc_pot * 0.90)
 
         if winner and winner.owner_id:
-            # Credit winner wallet
-            user_result = await session.execute(
-                select(User).where(User.id == winner.owner_id)
-            )
-            user = user_result.scalar_one_or_none()
-            if user:
-                user.balance_cents += payout_cents
+            # Award Sweepstakes Coins and create SweepReward audit record
+            await award_sweep_coins(winner.owner_id, payout_sc, board_id, winner.id, db_session=session)
 
-            payout_tx = Transaction(
-                id=str(uuid.uuid4()),
-                user_id=winner.owner_id,
-                board_id=board_id,
-                amount_cents=payout_cents,
-                type="payout",
-            )
-            session.add(payout_tx)
-            # Create Payout audit record (idempotent, sharing same session/transaction)
-            await send_payout(winner.owner_id, payout_cents, board_id, winner.id, db_session=session)
-
-        # Record house rake
+        # Record house rake (GC retained, no transaction needed for house in SC model)
         rake_tx = Transaction(
             id=str(uuid.uuid4()),
             user_id=None,
             board_id=board_id,
-            amount_cents=rake_cents,
+            amount=int(total_gc_pot * 0.10),
             type="rake",
+            currency="GC",
         )
         session.add(rake_tx)
         await session.commit()

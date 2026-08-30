@@ -9,15 +9,20 @@ import MySquares from "./pages/MySquares";
 import Wallet from "./pages/Wallet";
 import CreateBoard from "./pages/CreateBoard";
 import Sandbox from "./pages/Sandbox";
+import OfficialRules from "./pages/OfficialRules";
 import { API } from "./config";
 
-function formatCents(c: number) {
-  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(c / 100);
+function formatGC(n: number) {
+  return n.toLocaleString() + " GC";
+}
+function formatSC(n: number) {
+  return n.toLocaleString() + " SC";
 }
 
 function Nav() {
   const { user, logout } = useAuth();
-  const [balance, setBalance] = useState<number | null>(null);
+  const [goldCoins, setGoldCoins] = useState<number | null>(null);
+  const [sweepCoins, setSweepCoins] = useState<number | null>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
   const location = useLocation();
   const navRef = useRef<HTMLDivElement>(null);
@@ -42,10 +47,17 @@ function Nav() {
     if (user) {
       fetch(`${API}/wallet/me`, { credentials: "include" })
         .then((r) => r.json())
-        .then((d) => setBalance(d.balance_cents ?? 0))
-        .catch(() => setBalance(null));
+        .then((d) => {
+          setGoldCoins(d.gold_coins ?? 0);
+          setSweepCoins(d.sweep_coins ?? 0);
+        })
+        .catch(() => {
+          setGoldCoins(null);
+          setSweepCoins(null);
+        });
     } else {
-      setBalance(null);
+      setGoldCoins(null);
+      setSweepCoins(null);
     }
   }, [user]);
 
@@ -86,15 +98,23 @@ function Nav() {
         </div>
 
         {/* Right: balance + user */}
-        <div className="flex gap-3 items-center text-sm">
+        <div className="flex gap-2 items-center text-sm">
           {user ? (
             <>
-              {balance !== null && (
+              {goldCoins !== null && (
                 <Link
                   to="/wallet"
-                  className="text-green-400 hover:text-green-300 font-mono bg-zinc-800 border border-zinc-700 rounded-lg px-2.5 py-1 hover:border-zinc-600 transition-all text-xs font-bold"
+                  className="text-yellow-400 hover:text-yellow-300 font-mono bg-zinc-800 border border-zinc-700 rounded-lg px-2.5 py-1 hover:border-zinc-600 transition-all text-xs font-bold"
                 >
-                  {formatCents(balance)}
+                  🟡 {formatGC(goldCoins)}
+                </Link>
+              )}
+              {sweepCoins !== null && (
+                <Link
+                  to="/wallet"
+                  className="text-purple-300 hover:text-purple-200 font-mono bg-zinc-800 border border-zinc-700 rounded-lg px-2.5 py-1 hover:border-zinc-600 transition-all text-xs font-bold"
+                >
+                  🎟️ {formatSC(sweepCoins)}
                 </Link>
               )}
               <span className="hidden sm:inline text-zinc-400 text-xs">Hi, {user.display_name}</span>
@@ -186,7 +206,17 @@ export default function App() {
               <Route path="/wallet" element={<Wallet />} />
               <Route path="/create-board" element={<CreateBoard />} />
               <Route path="/sandbox" element={<Sandbox />} />
+              <Route path="/rules" element={<OfficialRules />} />
             </Routes>
+            {/* Footer */}
+            <footer className="border-t border-zinc-800 mt-16 py-8 text-center text-xs text-zinc-600">
+              <p>© {new Date().getFullYear()} SquaresBoard. All rights reserved.</p>
+              <p className="mt-2">
+                <Link to="/rules" className="text-blue-500 hover:text-blue-400 underline">Official Rules & No Purchase Necessary</Link>
+                {" · "}
+                <span>No Purchase Necessary to Win.</span>
+              </p>
+            </footer>
           </div>
         </HashRouter>
       </ToastProvider>

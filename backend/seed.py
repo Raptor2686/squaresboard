@@ -56,6 +56,9 @@ MOCK_GAMES = [
 
 PRICE_TIERS = [1, 5, 10, 20, 100]
 
+# SC boards use lower price tiers since SC is harder to earn
+SC_PRICE_TIERS = [10, 25, 50, 100, 250]
+
 
 async def seed():
     async with engine.begin() as conn:
@@ -98,21 +101,45 @@ async def seed():
             session.add(game)
             await session.commit()
 
-            # Create boards for each quarter × price tier
+            # Create boards for each quarter × price tier × currency
             for quarter in [Quarter.Q1, Quarter.Q2, Quarter.Q3, Quarter.Q4]:
+                # GC boards
                 for price in PRICE_TIERS:
                     board = Board(
                         id=str(uuid.uuid4()),
                         game_id=game.id,
                         quarter=quarter,
                         price_tier=price,
+                        entry_currency="GC",
                         status=BoardStatus.OPEN,
                         is_private=False,
                     )
                     session.add(board)
                     await session.commit()
 
-                    # Pre-create 10 empty squares
+                    for pos in range(10):
+                        square = Square(
+                            id=str(uuid.uuid4()),
+                            board_id=board.id,
+                            position=pos,
+                        )
+                        session.add(square)
+                    await session.commit()
+
+                # SC boards
+                for price in SC_PRICE_TIERS:
+                    board = Board(
+                        id=str(uuid.uuid4()),
+                        game_id=game.id,
+                        quarter=quarter,
+                        price_tier=price,
+                        entry_currency="SC",
+                        status=BoardStatus.OPEN,
+                        is_private=False,
+                    )
+                    session.add(board)
+                    await session.commit()
+
                     for pos in range(10):
                         square = Square(
                             id=str(uuid.uuid4()),

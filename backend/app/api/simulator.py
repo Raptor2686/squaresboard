@@ -1,15 +1,20 @@
 import uuid
 import random
 from datetime import datetime, timedelta, timezone
+# pyrefly: ignore [missing-import]
 from fastapi import APIRouter, HTTPException, Cookie
+# pyrefly: ignore [missing-import]
 from pydantic import BaseModel, EmailStr
 from typing import Annotated
+# pyrefly: ignore [missing-import]
 from sqlalchemy import select
+# pyrefly: ignore [missing-import]
 from sqlalchemy.orm import joinedload
 
 from app.database import async_session
 from app.models import Game, Board, Square, User, Transaction, Sport, Quarter, BoardStatus, GameStatus
 from app.services.score_polling import resolve_board
+from app.api.auth import _get_user_from_token
 
 router = APIRouter()
 

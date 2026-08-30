@@ -43,7 +43,12 @@ class User(Base):
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     display_name: Mapped[str] = mapped_column(String(100), nullable=False)
     stripe_customer_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    balance_cents: Mapped[int] = mapped_column(Integer, default=0)  # wallet balance
+
+    # Sweepstakes dual-currency wallet
+    gold_coins: Mapped[int] = mapped_column(Integer, default=0)          # Purchased, no cash value
+    sweep_coins: Mapped[int] = mapped_column(Integer, default=0)         # Won/earned, redeemable for prizes
+    last_free_sc_claim: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)  # throttle daily free SC
+
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     squares: Mapped[list["Square"]] = relationship(back_populates="owner")
@@ -91,7 +96,10 @@ class Board(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     game_id: Mapped[str] = mapped_column(String(36), ForeignKey("games.id"), nullable=False)
     quarter: Mapped[Quarter] = mapped_column(Enum(Quarter), nullable=False)
-    price_tier: Mapped[float] = mapped_column(Float, nullable=False)
+    # price_tier: cost per square in entry_currency units
+    price_tier: Mapped[int] = mapped_column(Integer, nullable=False)
+    # entry_currency: 'GC' = Gold Coins board, 'SC' = Sweepstakes Coins board
+    entry_currency: Mapped[str] = mapped_column(String(5), nullable=False, default="GC")
     status: Mapped[BoardStatus] = mapped_column(Enum(BoardStatus), default=BoardStatus.OPEN)
     is_private: Mapped[bool] = mapped_column(Boolean, default=False)
     share_link: Mapped[str | None] = mapped_column(String(36), unique=True, nullable=True)
@@ -111,37 +119,38 @@ class Square(Base):
     board_id: Mapped[str] = mapped_column(String(36), ForeignKey("boards.id"), nullable=False)
     owner_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id"), nullable=True)
     number: Mapped[int | None] = mapped_column(Integer, nullable=True)  # 0-9, assigned when board fills
-    position: Mapped[int] = mapped_column(Integer, nullable=False)  # 0-9
+    position: Mapped[int] = mapped_column(Integer, nullable=False)       # 0-9
     purchased_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    stripe_payment_intent: Mapped[str | None] = mapped_column(String(255), nullable=True)  # deposit PI for deposits
 
     board: Mapped["Board"] = relationship(back_populates="squares")
     owner: Mapped["User | None"] = relationship(back_populates="squares")
-    payout: Mapped["Payout | None"] = relationship(back_populates="square", uselist=False)
+    sweep_reward: Mapped["SweepReward | None"] = relationship(back_populates="square", uselist=False)
 
 
-class Payout(Base):
-    __tablename__ = "payouts"
+class SweepReward(Base):
+    """Sweepstakes Coin reward granted to a winning square — replaces old USD Payout."""
+    __tablename__ = "sweep_rewards"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     square_id: Mapped[str] = mapped_column(String(36), ForeignKey("squares.id"), nullable=False)
-    amount_cents: Mapped[int] = mapped_column(Integer, nullable=False)
-    status: Mapped[str] = mapped_column(String(20), default="pending")  # pending | sent | failed
-    stripe_transfer_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    sweep_coins_awarded: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(String(20), default="credited")  # credited | redeemed
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
-    square: Mapped["Square"] = relationship(back_populates="payout")
+    square: Mapped["Square"] = relationship(back_populates="sweep_reward")
 
 
 class Transaction(Base):
-    """Immutable ledger of all money movements."""
+    """Immutable ledger of all coin movements."""
     __tablename__ = "transactions"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    user_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id"), nullable=True)  # null for rake
-    board_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("boards.id"), nullable=True)  # for rake/payout
-    amount_cents: Mapped[int] = mapped_column(Integer, nullable=False)
-    type: Mapped[str] = mapped_column(String(20), nullable=False)
+    user_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id"), nullable=True)
+    board_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("boards.id"), nullable=True)
+    amount: Mapped[int] = mapped_column(Integer, nullable=False)  # positive = credit, negative = debit
+    # type options: gc_purchase | gc_spend | sc_earn | sc_redeem | sc_free_claim
+    type: Mapped[str] = mapped_column(String(30), nullable=False)
+    currency: Mapped[str] = mapped_column(String(10), nullable=False, default="GC")  # GC or SC
     reference_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
