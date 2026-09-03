@@ -11,21 +11,32 @@ from app.api.auth import _get_user_from_token
 router = APIRouter()
 
 # ---------------------------------------------------------------------------
-# Gold Coin bundles: real money → GC (no cash value)
-# $5, $10, $20, $50, $100, $1000 packages with bonus GC & SC
+# ---------------------------------------------------------------------------
+# Gold Coin bundles: real money → GC (no cash value) + FREE bonus SC
+# Matched pricing:
+#   $4.99   →   500 GC  +   5 FREE SC
+#   $9.99   → 1,000 GC  +  10 FREE SC
+#  $19.99   → 2,000 GC  +  20 FREE SC
+#  $49.99   → 5,000 GC  +  50 FREE SC
+#  $99.99   → 10,000 GC + 100 FREE SC
+# $499.99   → 50,000 GC + 500 FREE SC
+# $999.99   → 100,000 GC+ 1,000 FREE SC
 # ---------------------------------------------------------------------------
 GC_BUNDLES = [
-    {"id": "gc_5",    "price_cents": 500,    "gold_coins": 500,    "bonus_sc": 50,    "label": "500 GC",    "bonus": ""},
-    {"id": "gc_10",   "price_cents": 1000,   "gold_coins": 1100,   "bonus_sc": 120,   "label": "1,100 GC",  "bonus": "+100 Bonus"},
-    {"id": "gc_20",   "price_cents": 2000,   "gold_coins": 2300,   "bonus_sc": 260,   "label": "2,300 GC",  "bonus": "+300 Bonus"},
-    {"id": "gc_50",   "price_cents": 5000,   "gold_coins": 6000,   "bonus_sc": 700,   "label": "6,000 GC",  "bonus": "+1,000 Bonus"},
-    {"id": "gc_100",  "price_cents": 10000,  "gold_coins": 13000,  "bonus_sc": 1500,  "label": "13,000 GC", "bonus": "+3,000 Bonus"},
-    {"id": "gc_1000", "price_cents": 100000, "gold_coins": 150000, "bonus_sc": 18000, "label": "150,000 GC","bonus": "+50,000 Bonus"},
+    {"id": "gc_5",    "price_cents": 499,    "gold_coins": 500,    "bonus_sc": 5.0,    "label": "500 GC",    "bonus": "FREE 5 SC"},
+    {"id": "gc_10",   "price_cents": 999,    "gold_coins": 1000,   "bonus_sc": 10.0,   "label": "1,000 GC",  "bonus": "FREE 10 SC"},
+    {"id": "gc_20",   "price_cents": 1999,   "gold_coins": 2000,   "bonus_sc": 20.0,   "label": "2,000 GC",  "bonus": "FREE 20 SC"},
+    {"id": "gc_50",   "price_cents": 4999,   "gold_coins": 5000,   "bonus_sc": 50.0,   "label": "5,000 GC",  "bonus": "FREE 50 SC"},
+    {"id": "gc_100",  "price_cents": 9999,   "gold_coins": 10000,  "bonus_sc": 100.0,  "label": "10,000 GC", "bonus": "FREE 100 SC"},
+    {"id": "gc_500",  "price_cents": 49999,  "gold_coins": 50000,  "bonus_sc": 500.0,  "label": "50,000 GC", "bonus": "FREE 500 SC"},
+    {"id": "gc_1000", "price_cents": 99999,  "gold_coins": 100000, "bonus_sc": 1000.0, "label": "100,000 GC","bonus": "FREE 1,000 SC"},
 ]
 
 
 def calculate_custom_bundle(amount_usd: float) -> dict:
-    """Calculate Gold Coins and bonus Sweepstakes Coins for any custom USD amount."""
+    """Calculate Gold Coins and bonus Sweepstakes Coins for any custom USD amount.
+    Every $1.00 USD gives 100 Gold Coins + 1 Free Sweepstakes Coin bonus.
+    """
     if amount_usd < 1:
         raise ValueError("Minimum purchase amount is $1.00")
     if amount_usd > 10000:
@@ -33,38 +44,16 @@ def calculate_custom_bundle(amount_usd: float) -> dict:
 
     price_cents = int(round(amount_usd * 100))
     dollars = price_cents / 100.0
-    base_gc = int(round(dollars * 100))
+    total_gc = int(round(dollars * 100))
+    bonus_sc = round(dollars, 2)
 
-    if dollars >= 1000:
-        bonus_gc = int(round(base_gc * 0.50))
-        bonus_sc = int(round(dollars * 18))
-    elif dollars >= 100:
-        bonus_gc = int(round(base_gc * 0.30))
-        bonus_sc = int(round(dollars * 15))
-    elif dollars >= 50:
-        bonus_gc = int(round(base_gc * 0.20))
-        bonus_sc = int(round(dollars * 14))
-    elif dollars >= 20:
-        bonus_gc = int(round(base_gc * 0.15))
-        bonus_sc = int(round(dollars * 13))
-    elif dollars >= 10:
-        bonus_gc = int(round(base_gc * 0.10))
-        bonus_sc = int(round(dollars * 12))
-    elif dollars >= 5:
-        bonus_gc = 0
-        bonus_sc = int(round(dollars * 10))
-    else:
-        bonus_gc = 0
-        bonus_sc = int(round(dollars * 5))
-
-    total_gc = base_gc + bonus_gc
     return {
         "id": f"custom_{price_cents}",
         "price_cents": price_cents,
         "gold_coins": total_gc,
         "bonus_sc": bonus_sc,
         "label": f"{total_gc:,} GC",
-        "bonus": f"+{bonus_gc:,} Bonus" if bonus_gc > 0 else "",
+        "bonus": f"FREE {bonus_sc:,.2f} SC",
         "is_custom": True,
     }
 

@@ -45,34 +45,11 @@ function formatUSD(cents: number) {
 function calculateCustomPreview(amount: number) {
   if (!amount || isNaN(amount) || amount < 1) return null;
   const dollars = amount;
-  const base_gc = Math.round(dollars * 100);
-  let bonus_gc = 0;
-  let bonus_sc = 0;
-  if (dollars >= 1000) {
-    bonus_gc = Math.round(base_gc * 0.50);
-    bonus_sc = Math.round(dollars * 18);
-  } else if (dollars >= 100) {
-    bonus_gc = Math.round(base_gc * 0.30);
-    bonus_sc = Math.round(dollars * 15);
-  } else if (dollars >= 50) {
-    bonus_gc = Math.round(base_gc * 0.20);
-    bonus_sc = Math.round(dollars * 14);
-  } else if (dollars >= 20) {
-    bonus_gc = Math.round(base_gc * 0.15);
-    bonus_sc = Math.round(dollars * 13);
-  } else if (dollars >= 10) {
-    bonus_gc = Math.round(base_gc * 0.10);
-    bonus_sc = Math.round(dollars * 12);
-  } else if (dollars >= 5) {
-    bonus_gc = 0;
-    bonus_sc = Math.round(dollars * 10);
-  } else {
-    bonus_gc = 0;
-    bonus_sc = Math.round(dollars * 5);
-  }
+  const total_gc = Math.round(dollars * 100);
+  const bonus_sc = Math.round(dollars * 100) / 100;
   return {
-    total_gc: base_gc + bonus_gc,
-    bonus_gc,
+    total_gc,
+    bonus_gc: 0,
     bonus_sc,
   };
 }
