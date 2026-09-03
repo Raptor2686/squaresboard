@@ -16,8 +16,17 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        release {
+            storeFile file(project.findProperty('RELEASE_STORE_FILE') ?: '../keystore/squaresboard.jks')
+            storePassword project.findProperty('RELEASE_STORE_PASSWORD') ?: 'SquaresBoard2026!'
+            keyAlias project.findProperty('RELEASE_KEY_ALIAS') ?: 'squaresboard'
+            keyPassword project.findProperty('RELEASE_KEY_PASSWORD') ?: 'SquaresBoard2026!'
+        }
+    }
     buildTypes {
         release {
+            signingConfig signingConfigs.release
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
