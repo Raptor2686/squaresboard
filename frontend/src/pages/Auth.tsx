@@ -43,8 +43,9 @@ export default function Auth() {
 
       await refresh();
       window.location.hash = "#/";
-    } catch {
-      setError("Network error — is the backend running?");
+    } catch (err: any) {
+      console.error("Auth submit failed:", err);
+      setError(`Connection failed: ${err?.message || "Network error"} (${endpoint})`);
     } finally {
       setLoading(false);
     }
