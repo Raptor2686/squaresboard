@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useAuth } from "../context/AuthContext";
+import { useAuth, getAuthHeaders } from "../context/AuthContext";
 import { Link } from "react-router-dom";
 import { API } from "../config";
 
@@ -41,7 +41,10 @@ export default function MySquares() {
 
   useEffect(() => {
     if (!user) { setLoading(false); return; }
-    fetch(`${API}/squares/my-boards`, { credentials: "include" })
+    fetch(`${API}/squares/my-boards`, {
+      credentials: "include",
+      headers: getAuthHeaders(),
+    })
       .then((r) => r.json())
       .then((d) => { setSquares(d); setLoading(false); })
       .catch(() => setLoading(false));

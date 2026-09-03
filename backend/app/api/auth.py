@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime, timedelta
-from fastapi import APIRouter, HTTPException, Response, Cookie
+from fastapi import APIRouter, HTTPException, Response, Cookie, Header
 from typing import Annotated
 from pydantic import BaseModel, EmailStr
 import bcrypt
@@ -16,6 +16,22 @@ SESSION_MAX_AGE_DAYS = 7
 
 def generate_token() -> str:
     return f"sb_{uuid.uuid4().hex}{uuid.uuid4().hex}"
+
+
+def _resolve_token(
+    session_token: str | None = None,
+    authorization: str | None = None,
+    x_session_token: str | None = None,
+) -> str | None:
+    if session_token:
+        return session_token
+    if x_session_token:
+        return x_session_token
+    if authorization:
+        if authorization.lower().startswith("bearer "):
+            return authorization[7:].strip()
+        return authorization.strip()
+    return None
 
 
 class SignupRequest(BaseModel):
@@ -56,7 +72,7 @@ async def signup(data: SignupRequest, response: Response):
         await session.commit()
 
         _set_cookie(response, token)
-        return {"user_id": user.id, "display_name": user.display_name}
+        return {"user_id": user.id, "display_name": user.display_name, "token": token}
 
 
 @router.post("/login")
@@ -85,33 +101,49 @@ async def login(data: LoginRequest, response: Response):
         await session.commit()
 
         _set_cookie(response, token)
-        return {"user_id": user.id, "display_name": user.display_name}
+        return {"user_id": user.id, "display_name": user.display_name, "token": token}
 
 
 @router.post("/logout")
-async def logout(response: Response, session_token: Annotated[str | None, Cookie(alias="session")] = None):
-    if session_token:
+async def logout(
+    response: Response,
+    session_token: Annotated[str | None, Cookie(alias="session")] = None,
+    authorization: Annotated[str | None, Header(alias="authorization")] = None,
+    x_session_token: Annotated[str | None, Header(alias="x-session-token")] = None,
+):
+    token = _resolve_token(session_token, authorization, x_session_token)
+    if token:
         async with async_session() as session:
-            await session.execute(delete(Session).where(Session.token == session_token))
+            await session.execute(delete(Session).where(Session.token == token))
             await session.commit()
     response.delete_cookie("session")
     return {"ok": True}
 
 
 @router.get("/me")
-async def get_me(session_token: Annotated[str | None, Cookie(alias="session")] = None):
-    user = await _get_user_from_token(session_token)
+async def get_me(
+    session_token: Annotated[str | None, Cookie(alias="session")] = None,
+    authorization: Annotated[str | None, Header(alias="authorization")] = None,
+    x_session_token: Annotated[str | None, Header(alias="x-session-token")] = None,
+):
+    token = _resolve_token(session_token, authorization, x_session_token)
+    user = await _get_user_from_token(token)
     if not user:
         raise HTTPException(status_code=401, detail="Not authenticated")
     return {"id": user.id, "user_id": user.id, "display_name": user.display_name, "email": user.email}
 
 
-async def _get_user_from_token(token: str | None) -> User | None:
-    if not token:
+async def _get_user_from_token(
+    token: str | None = None,
+    authorization: str | None = None,
+    x_session_token: str | None = None,
+) -> User | None:
+    t = _resolve_token(token, authorization, x_session_token)
+    if not t:
         return None
     async with async_session() as session:
         result = await session.execute(
-            select(Session).where(Session.token == token)
+            select(Session).where(Session.token == t)
         )
         db_session = result.scalar_one_or_none()
         if not db_session or db_session.expires_at < datetime.utcnow():

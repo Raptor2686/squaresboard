@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useAuth } from "../context/AuthContext";
+import { useAuth, getAuthHeaders } from "../context/AuthContext";
 import { API } from "../config";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
@@ -103,7 +103,7 @@ export default function Wallet() {
   async function loadWallet() {
     try {
       const [walletRes, bundleRes] = await Promise.all([
-        fetch(`${API}/wallet/me`, { credentials: "include" }),
+        fetch(`${API}/wallet/me`, { credentials: "include", headers: getAuthHeaders() }),
         fetch(`${API}/wallet/bundles`, { credentials: "include" }),
       ]);
       if (!walletRes.ok) throw new Error("Could not load wallet data");
@@ -134,6 +134,7 @@ export default function Wallet() {
       const res = await fetch(`${API}/wallet/buy-coins?bundle_id=${bundle.id}`, {
         method: "POST",
         credentials: "include",
+        headers: getAuthHeaders(),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || "Failed to initiate purchase");
@@ -164,7 +165,7 @@ export default function Wallet() {
     try {
       const res = await fetch(`${API}/wallet/buy-coins`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
         credentials: "include",
         body: JSON.stringify({ custom_amount: parsed }),
       });
@@ -188,6 +189,7 @@ export default function Wallet() {
       const res = await fetch(`${API}/wallet/claim-free-sc`, {
         method: "POST",
         credentials: "include",
+        headers: getAuthHeaders(),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || "Claim failed");
@@ -214,6 +216,7 @@ export default function Wallet() {
       const res = await fetch(`${API}/wallet/redeem-sc?amount=${amount}`, {
         method: "POST",
         credentials: "include",
+        headers: getAuthHeaders(),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || "Redemption failed");

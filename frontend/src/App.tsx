@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { HashRouter, Routes, Route, Link, useLocation } from "react-router-dom";
-import { AuthProvider, useAuth } from "./context/AuthContext";
+import { AuthProvider, useAuth, getAuthHeaders } from "./context/AuthContext";
 import { ToastProvider } from "./components/Toast";
 import Marketplace from "./pages/Marketplace";
 import GameDetail from "./pages/GameDetail";
@@ -46,7 +46,10 @@ function Nav() {
 
   useEffect(() => {
     if (user) {
-      fetch(`${API}/wallet/me`, { credentials: "include" })
+      fetch(`${API}/wallet/me`, {
+        credentials: "include",
+        headers: getAuthHeaders(),
+      })
         .then((r) => r.json())
         .then((d) => {
           setGoldCoins(d.gold_coins ?? 0);

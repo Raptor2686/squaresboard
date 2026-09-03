@@ -180,7 +180,9 @@ ALLOWED_ORIGINS = [
     "https://localhost:5173",
     "http://localhost:3000",
     "http://localhost",
+    "https://localhost",
     "capacitor://localhost",
+    "https://squaresboard.onrender.com",
     *frontend_origins,
 ]
 

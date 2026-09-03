@@ -37,6 +37,10 @@ export default function Auth() {
         return;
       }
 
+      if (data.token) {
+        localStorage.setItem("sb_token", data.token);
+      }
+
       await refresh();
       window.location.hash = "#/";
     } catch {
