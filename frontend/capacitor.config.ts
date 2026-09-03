@@ -4,6 +4,10 @@ const config: CapacitorConfig = {
   appId: 'com.squaresboard.app',
   appName: 'SquaresBoard',
   webDir: 'dist',
+  server: {
+    androidScheme: 'http',
+    cleartext: true
+  },
   plugins: {
     CapacitorHttp: {
       enabled: true
