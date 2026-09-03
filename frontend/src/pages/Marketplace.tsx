@@ -43,7 +43,7 @@ export default function Marketplace() {
     if (sport) params.set("sport", sport);
     if (statusFilter !== "all") params.set("status", statusFilter);
 
-    fetch(`${API}/games?${params}`)
+    fetch(`${API}/games/?${params}`)
       .then((r) => r.json())
       .then((data) => {
         setGames(Array.isArray(data) ? data : []);

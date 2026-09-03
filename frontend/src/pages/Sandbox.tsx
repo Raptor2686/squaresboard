@@ -59,9 +59,9 @@ export default function Sandbox() {
 
   async function loadData() {
     try {
-      const gRes = await fetch(`${API}/games`);
+      const gRes = await fetch(`${API}/games/`);
       const gData = await gRes.json();
-      setGames(gData);
+      setGames(Array.isArray(gData) ? gData : []);
 
       const bRes = await fetch(`${API}/boards/`, { credentials: "include" });
       const bData = await bRes.json();

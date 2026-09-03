@@ -32,11 +32,11 @@ export default function CreateBoard() {
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    fetch(`${API}/games`)
+    fetch(`${API}/games/`)
       .then((r) => r.json())
       .then((data) => {
-        // filter only upcoming or live games
-        const activeGames = data.filter((g: Game) => g.status !== "completed");
+        const gamesList = Array.isArray(data) ? data : [];
+        const activeGames = gamesList.filter((g: Game) => g.status !== "completed");
         setGames(activeGames);
         if (activeGames.length > 0) {
           setSelectedGameId(activeGames[0].id);
