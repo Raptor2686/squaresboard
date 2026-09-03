@@ -54,10 +54,8 @@ MOCK_GAMES = [
     },
 ]
 
-PRICE_TIERS = [1, 5, 10, 20, 100]
-
-# SC boards use lower price tiers since SC is harder to earn
-SC_PRICE_TIERS = [10, 25, 50, 100, 250]
+PRICE_TIERS = [50, 100, 500, 1000, 2000, 5000, 10000, 100000]
+SC_PRICE_TIERS = [0.5, 1, 5, 10, 20, 50, 100, 1000]
 
 
 async def seed():

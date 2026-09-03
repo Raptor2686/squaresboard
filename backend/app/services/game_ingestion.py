@@ -8,7 +8,8 @@ from app.config import settings
 
 THESPORTSDB_BASE = "https://www.thesportsdb.com/api/v1/json"  # key appended per-request below
 
-GC_TIERS = [50, 100, 250, 500, 1000, 2500]
+GC_TIERS = [50, 100, 500, 1000, 2000, 5000, 10000, 100000]
+SC_TIERS = [0.5, 1, 5, 10, 20, 50, 100, 1000]
 
 SPORT_LEAGUE_IDS = {
     "football": "4391",
@@ -101,7 +102,7 @@ async def run():
                 session.add(game)
                 await session.commit()
 
-                # Auto-create one board per quarter per price tier
+                # Auto-create boards per quarter per price tier for both GC and SC
                 for quarter in Quarter:
                     for price in GC_TIERS:
                         board = Board(
@@ -109,6 +110,30 @@ async def run():
                             game_id=game.id,
                             quarter=quarter,
                             price_tier=price,
+                            entry_currency="GC",
+                            status=BoardStatus.OPEN,
+                            is_private=False,
+                        )
+                        session.add(board)
+                        await session.flush()
+
+                        # Pre-create all 10 squares (unowned until purchase)
+                        for pos in range(10):
+                            square = Square(
+                                id=str(uuid.uuid4()),
+                                board_id=board.id,
+                                position=pos,
+                            )
+                            session.add(square)
+                        await session.commit()
+
+                    for price in SC_TIERS:
+                        board = Board(
+                            id=str(uuid.uuid4()),
+                            game_id=game.id,
+                            quarter=quarter,
+                            price_tier=price,
+                            entry_currency="SC",
                             status=BoardStatus.OPEN,
                             is_private=False,
                         )

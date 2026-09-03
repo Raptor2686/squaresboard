@@ -19,7 +19,10 @@ interface Board {
   id: string;
   game_id: string;
   quarter: string;
-  price_tier: number;
+  price_tier_gc?: number;
+  price_tier?: number;
+  entry_currency?: string;
+  payout_sc?: number;
   status: string;
 }
 
@@ -50,7 +53,8 @@ export default function Sandbox() {
   const [loadingAction, setLoadingAction] = useState<Record<string, boolean>>({});
 
   // Sandbox Credit
-  const [creditAmount, setCreditAmount] = useState("100");
+  const [creditCurrency, setCreditCurrency] = useState<"GC" | "SC">("GC");
+  const [creditAmount, setCreditAmount] = useState("5000");
   const [crediting, setCrediting] = useState(false);
 
   async function loadData() {
@@ -106,7 +110,7 @@ export default function Sandbox() {
         body: JSON.stringify({ home_team: homeTeam, away_team: awayTeam, sport }),
       });
       if (res.ok) {
-        showToast("Mock game and Q1/Q2 boards created! 🏈", "success");
+        showToast("Mock game with GC and SC boards created! 🏈", "success");
         await loadData();
       } else {
         const d = await res.json();
@@ -177,7 +181,7 @@ export default function Sandbox() {
         body: JSON.stringify({ home_score: home, away_score: away }),
       });
       if (res.ok) {
-        showToast("Board resolved and payouts credited! 🏆", "success");
+        showToast("Board resolved and SC rewards credited! 🏆", "success");
         await loadData();
         await refreshAuth();
       } else {
@@ -191,23 +195,21 @@ export default function Sandbox() {
     }
   }
 
-  async function handleAddSandboxBalance(e: React.FormEvent) {
-    e.preventDefault();
+  async function handleQuickCredit(amount: number, curr: "GC" | "SC") {
     if (!user) {
       showToast("Please sign in first.", "error");
       return;
     }
-    const cents = Math.round(parseFloat(creditAmount) * 100);
     setCrediting(true);
     try {
       const res = await fetch(`${API}/simulator/wallet/credit`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ amount_cents: cents }),
+        body: JSON.stringify({ amount, currency: curr }),
       });
       if (res.ok) {
-        showToast(`Credited ${parseFloat(creditAmount).toLocaleString("en-US", { style: "currency", currency: "USD" })} to sandbox wallet! 💸`, "success");
+        showToast(`Credited +${amount.toLocaleString()} ${curr === "SC" ? "🎟️ SC" : "🟡 GC"}! ✨`, "success");
         await refreshAuth();
       } else {
         const d = await res.json();
@@ -218,6 +220,13 @@ export default function Sandbox() {
     } finally {
       setCrediting(false);
     }
+  }
+
+  async function handleAddSandboxBalance(e: React.FormEvent) {
+    e.preventDefault();
+    const amount = parseInt(creditAmount);
+    if (!amount || amount <= 0) return;
+    await handleQuickCredit(amount, creditCurrency);
   }
 
   if (loading) return <div className="p-8 text-center text-zinc-500 animate-pulse">Loading Sandbox Panel...</div>;
@@ -244,31 +253,79 @@ export default function Sandbox() {
           {user && (
             <div className="bg-zinc-800 border border-zinc-700/60 rounded-3xl p-6 shadow-xl space-y-4">
               <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                💵 Sandbox Wallet
+                🪙 Sandbox Wallet
               </h2>
-              <form onSubmit={handleAddSandboxBalance} className="space-y-3">
-                <div>
-                  <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-1.5">
-                    Amount (USD)
-                  </label>
-                  <div className="relative">
-                    <span className="absolute left-3.5 top-2.5 text-zinc-400 font-bold">$</span>
+
+              {/* Quick credit chips */}
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleQuickCredit(1000, "GC")}
+                  disabled={crediting}
+                  className="bg-yellow-950/40 hover:bg-yellow-900/50 border border-yellow-700/50 text-yellow-300 text-xs font-bold py-2 px-2.5 rounded-xl transition-all disabled:opacity-50"
+                >
+                  +1,000 🟡 GC
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleQuickCredit(5000, "GC")}
+                  disabled={crediting}
+                  className="bg-yellow-950/40 hover:bg-yellow-900/50 border border-yellow-700/50 text-yellow-300 text-xs font-bold py-2 px-2.5 rounded-xl transition-all disabled:opacity-50"
+                >
+                  +5,000 🟡 GC
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleQuickCredit(50, "SC")}
+                  disabled={crediting}
+                  className="bg-purple-950/40 hover:bg-purple-900/50 border border-purple-700/50 text-purple-300 text-xs font-bold py-2 px-2.5 rounded-xl transition-all disabled:opacity-50"
+                >
+                  +50 🎟️ SC
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleQuickCredit(250, "SC")}
+                  disabled={crediting}
+                  className="bg-purple-950/40 hover:bg-purple-900/50 border border-purple-700/50 text-purple-300 text-xs font-bold py-2 px-2.5 rounded-xl transition-all disabled:opacity-50"
+                >
+                  +250 🎟️ SC
+                </button>
+              </div>
+
+              <form onSubmit={handleAddSandboxBalance} className="space-y-3 pt-2 border-t border-zinc-700/50">
+                <div className="flex gap-2">
+                  <div className="flex-1">
+                    <label className="block text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-1">
+                      Custom Amount
+                    </label>
                     <input
                       type="number"
-                      step="0.01"
                       min="1"
-                      className="w-full bg-zinc-900 border border-zinc-700 rounded-xl py-2 pl-8 pr-4 text-white font-bold font-mono focus:border-blue-500 outline-none"
+                      className="w-full bg-zinc-900 border border-zinc-700 rounded-xl py-2 px-3 text-white font-bold font-mono text-sm focus:border-blue-500 outline-none"
                       value={creditAmount}
                       onChange={(e) => setCreditAmount(e.target.value)}
                     />
+                  </div>
+                  <div className="w-24">
+                    <label className="block text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-1">
+                      Coin
+                    </label>
+                    <select
+                      className="w-full bg-zinc-900 border border-zinc-700 rounded-xl py-2 px-2 text-white font-bold text-sm focus:border-blue-500 outline-none"
+                      value={creditCurrency}
+                      onChange={(e) => setCreditCurrency(e.target.value as "GC" | "SC")}
+                    >
+                      <option value="GC">🟡 GC</option>
+                      <option value="SC">🎟️ SC</option>
+                    </select>
                   </div>
                 </div>
                 <button
                   type="submit"
                   disabled={crediting}
-                  className="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-2.5 rounded-xl transition-all shadow-lg shadow-green-950/20 disabled:opacity-50"
+                  className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 rounded-xl transition-all text-xs disabled:opacity-50"
                 >
-                  {crediting ? "Crediting..." : "Add Sandbox Cash"}
+                  {crediting ? "Crediting..." : `Add ${creditCurrency}`}
                 </button>
               </form>
             </div>
@@ -410,15 +467,28 @@ export default function Sandbox() {
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {gameBoards.map((board) => {
                           const isBoardAction = loadingAction[board.id] || false;
+                          const curr = board.entry_currency || "GC";
+                          const price = board.price_tier_gc ?? board.price_tier ?? 0;
+                          const rawPayout = board.payout_sc ?? (price * 10 * 0.90);
+                          const payoutSC = rawPayout % 1 === 0 ? rawPayout.toLocaleString() : rawPayout.toFixed(2);
+                          const priceFormatted = price % 1 === 0 ? price.toLocaleString() : price.toFixed(2);
                           return (
                             <div key={board.id} className="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-4 flex flex-col justify-between gap-4">
                               <div className="flex justify-between items-start gap-2">
                                 <div>
-                                  <Link to={`/board/${board.id}`} className="font-bold text-sm text-zinc-200 hover:text-blue-400 transition-colors">
-                                    {board.quarter} Board
+                                  <Link to={`/board/${board.id}`} className="font-bold text-sm text-zinc-200 hover:text-blue-400 transition-colors flex items-center gap-1.5">
+                                    <span>{board.quarter} Board</span>
+                                    <span className={`text-[10px] font-black px-1.5 py-0.2 rounded border ${
+                                      curr === "SC"
+                                        ? "bg-purple-950/50 text-purple-300 border-purple-800/50"
+                                        : "bg-yellow-950/50 text-yellow-300 border-yellow-800/50"
+                                    }`}>
+                                      {curr}
+                                    </span>
                                   </Link>
                                   <span className="block text-xs text-zinc-500 mt-0.5">
-                                    Price: <span className="font-mono text-zinc-400">${board.price_tier.toFixed(2)}</span>
+                                    Cost: <span className="font-mono text-zinc-300 font-bold">{priceFormatted} {curr}</span>
+                                    <span className="text-purple-400 ml-1">· Win: {payoutSC} SC</span>
                                   </span>
                                 </div>
                                 <span className={`text-[10px] uppercase font-black px-2 py-0.5 rounded-full border ${

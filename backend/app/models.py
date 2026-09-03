@@ -45,8 +45,8 @@ class User(Base):
     stripe_customer_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     # Sweepstakes dual-currency wallet
-    gold_coins: Mapped[int] = mapped_column(Integer, default=0)          # Purchased, no cash value
-    sweep_coins: Mapped[int] = mapped_column(Integer, default=0)         # Won/earned, redeemable for prizes
+    gold_coins: Mapped[float] = mapped_column(Float, default=0.0)         # Purchased, no cash value
+    sweep_coins: Mapped[float] = mapped_column(Float, default=0.0)        # Won/earned, redeemable for prizes
     last_free_sc_claim: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)  # throttle daily free SC
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
@@ -97,7 +97,7 @@ class Board(Base):
     game_id: Mapped[str] = mapped_column(String(36), ForeignKey("games.id"), nullable=False)
     quarter: Mapped[Quarter] = mapped_column(Enum(Quarter), nullable=False)
     # price_tier: cost per square in entry_currency units
-    price_tier: Mapped[int] = mapped_column(Integer, nullable=False)
+    price_tier: Mapped[float] = mapped_column(Float, nullable=False)
     # entry_currency: 'GC' = Gold Coins board, 'SC' = Sweepstakes Coins board
     entry_currency: Mapped[str] = mapped_column(String(5), nullable=False, default="GC")
     status: Mapped[BoardStatus] = mapped_column(Enum(BoardStatus), default=BoardStatus.OPEN)
@@ -133,7 +133,7 @@ class SweepReward(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     square_id: Mapped[str] = mapped_column(String(36), ForeignKey("squares.id"), nullable=False)
-    sweep_coins_awarded: Mapped[int] = mapped_column(Integer, nullable=False)
+    sweep_coins_awarded: Mapped[float] = mapped_column(Float, nullable=False)
     status: Mapped[str] = mapped_column(String(20), default="credited")  # credited | redeemed
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
@@ -147,7 +147,7 @@ class Transaction(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     user_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id"), nullable=True)
     board_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("boards.id"), nullable=True)
-    amount: Mapped[int] = mapped_column(Integer, nullable=False)  # positive = credit, negative = debit
+    amount: Mapped[float] = mapped_column(Float, nullable=False)  # positive = credit, negative = debit
     # type options: gc_purchase | gc_spend | sc_earn | sc_redeem | sc_free_claim
     type: Mapped[str] = mapped_column(String(30), nullable=False)
     currency: Mapped[str] = mapped_column(String(10), nullable=False, default="GC")  # GC or SC

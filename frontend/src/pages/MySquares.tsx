@@ -13,6 +13,9 @@ interface OwnedSquare {
     status: string;
     quarter: string;
     price_tier: number;
+    price_tier_gc?: number;
+    entry_currency?: string;
+    payout_sc?: number;
     winning_square_id: string | null;
     game: {
       id: string;
@@ -20,10 +23,6 @@ interface OwnedSquare {
       away_team: string;
     };
   };
-}
-
-function formatCents(c: number) {
-  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(c / 100);
 }
 
 const STATUS_CONFIG: Record<string, { label: string; className: string }> = {
@@ -79,9 +78,11 @@ export default function MySquares() {
     return true;
   });
 
-  const totalWon = squares.reduce((sum, sq) => {
+  const totalWonSC = squares.reduce((sum, sq) => {
     const isWinner = sq.board.status === "resolved" && sq.board.winning_square_id === sq.square_id;
-    return isWinner ? sum + sq.board.price_tier * 9 * 100 : sum;
+    const price = sq.board.price_tier || sq.board.price_tier_gc || 0;
+    const payout = sq.board.payout_sc ?? (price * 10 * 0.90);
+    return isWinner ? sum + payout : sum;
   }, 0);
 
   const activeCount = squares.filter(
@@ -133,9 +134,9 @@ export default function MySquares() {
           <div className="text-2xl font-extrabold text-blue-400">{activeCount}</div>
           <div className="text-xs text-zinc-500 uppercase tracking-wider font-semibold mt-0.5">Active</div>
         </div>
-        <div className="bg-gradient-to-br from-green-950/60 to-emerald-950/60 border border-green-800/40 rounded-2xl p-4 text-center">
-          <div className="text-2xl font-extrabold text-green-400 font-mono">{formatCents(totalWon)}</div>
-          <div className="text-xs text-zinc-500 uppercase tracking-wider font-semibold mt-0.5">Total Won</div>
+        <div className="bg-gradient-to-br from-purple-950/60 to-indigo-950/60 border border-purple-800/40 rounded-2xl p-4 text-center">
+          <div className="text-2xl font-extrabold text-purple-300 font-mono">{totalWonSC.toLocaleString()} 🎟️ SC</div>
+          <div className="text-xs text-zinc-400 uppercase tracking-wider font-semibold mt-0.5">Total SC Won</div>
         </div>
       </div>
 
@@ -168,7 +169,11 @@ export default function MySquares() {
               sq.board.status === "resolved" && sq.board.winning_square_id !== null && !isWinner;
             const isCancelled = sq.board.status === "cancelled";
             const statusCfg = STATUS_CONFIG[sq.board.status] ?? STATUS_CONFIG.open;
-            const payoutCents = sq.board.price_tier * 9 * 100;
+            const curr = sq.board.entry_currency || "GC";
+            const price = sq.board.price_tier ?? sq.board.price_tier_gc ?? 0;
+            const rawPayout = sq.board.payout_sc ?? (price * 10 * 0.90);
+            const payoutSCStr = rawPayout % 1 === 0 ? rawPayout.toLocaleString() : rawPayout.toFixed(2);
+            const priceStr = price % 1 === 0 ? price.toLocaleString() : price.toFixed(2);
 
             return (
               <Link
@@ -204,6 +209,11 @@ export default function MySquares() {
                     <span className={`inline-block px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider ${statusCfg.className}`}>
                       {statusCfg.label}
                     </span>
+                    <span className={`inline-block px-1.5 py-0.2 rounded text-[10px] font-bold border ${
+                      curr === "SC" ? "bg-purple-950/40 text-purple-300 border-purple-800/40" : "bg-yellow-950/40 text-yellow-300 border-yellow-800/40"
+                    }`}>
+                      {curr}
+                    </span>
                     <span>{sq.board.quarter}</span>
                     <span>·</span>
                     <span>Pos {sq.position}</span>
@@ -219,25 +229,25 @@ export default function MySquares() {
                       <div className="text-yellow-400 font-extrabold text-lg flex items-center gap-1 justify-end">
                         🏆 Won!
                       </div>
-                      <div className="text-green-400 font-mono font-bold text-sm">+{formatCents(payoutCents)}</div>
+                      <div className="text-purple-300 font-mono font-bold text-sm">+{payoutSCStr} 🎟️ SC</div>
                     </div>
                   ) : isLoser ? (
                     <div>
                       <div className="text-zinc-500 text-sm font-semibold">No win</div>
-                      <div className="text-zinc-600 font-mono text-xs">-{formatCents(sq.board.price_tier * 100)}</div>
+                      <div className="text-zinc-600 font-mono text-xs">-{priceStr} {curr}</div>
                     </div>
                   ) : isCancelled ? (
                     <div>
                       <div className="text-red-400 text-sm font-semibold">Refunded</div>
-                      <div className="text-zinc-500 font-mono text-xs">{formatCents(sq.board.price_tier * 100)}</div>
+                      <div className="text-zinc-500 font-mono text-xs">{priceStr} {curr}</div>
                     </div>
                   ) : (
                     <div>
                       <div className="text-xs text-zinc-500 uppercase tracking-wider font-semibold mb-0.5">Potential</div>
-                      <div className="text-green-400 font-mono font-bold text-base">
-                        {formatCents(payoutCents)}
+                      <div className="text-purple-300 font-mono font-bold text-base">
+                        +{payoutSCStr} SC
                       </div>
-                      <div className="text-zinc-600 text-xs">{formatCents(sq.board.price_tier * 100)} buy-in</div>
+                      <div className="text-zinc-500 text-xs">{priceStr} {curr} buy-in</div>
                     </div>
                   )}
                 </div>
@@ -257,3 +267,4 @@ export default function MySquares() {
     </div>
   );
 }
+

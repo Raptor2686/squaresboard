@@ -218,7 +218,7 @@ print("\n" + "="*60)
 if changes:
     print(f"Migration complete. {len(changes)} change(s) applied:")
     for c in changes:
-        print(f"  ✓ {c}")
+        print(f"  + {c}")
 else:
     print("Nothing to migrate — schema already up to date.")
 print("="*60)

@@ -33,9 +33,10 @@ async def get_board_squares(board_id: str):
         )
         squares = squares_result.scalars().all()
 
-        # Payout is 90% of total GC pot, converted to SC (1 GC = 1 SC for simplicity)
+        # Payout is 90% of total pot
         total_pot_gc = board.price_tier * 10  # 10 squares
-        payout_sc = int(total_pot_gc * 0.90)
+        raw_payout = total_pot_gc * 0.90
+        payout_sc = int(raw_payout) if raw_payout.is_integer() else round(raw_payout, 2)
 
         return {
             "board_id": board.id,
@@ -117,9 +118,11 @@ async def purchase_square(
 
         if entry_currency == "SC":
             if db_user.sweep_coins < cost:
+                cost_str = f"{int(cost):,}" if cost.is_integer() else f"{cost}"
+                bal_str = f"{int(db_user.sweep_coins):,}" if db_user.sweep_coins.is_integer() else f"{db_user.sweep_coins}"
                 raise HTTPException(
                     status_code=400,
-                    detail=f"Insufficient Sweepstakes Coins. Need {cost:,} SC, you have {db_user.sweep_coins:,} SC."
+                    detail=f"Insufficient Sweepstakes Coins. Need {cost_str} SC, you have {bal_str} SC."
                 )
             db_user.sweep_coins -= cost
             tx = Transaction(
@@ -132,9 +135,11 @@ async def purchase_square(
             )
         else:  # default GC
             if db_user.gold_coins < cost:
+                cost_str = f"{int(cost):,}" if cost.is_integer() else f"{cost}"
+                bal_str = f"{int(db_user.gold_coins):,}" if db_user.gold_coins.is_integer() else f"{db_user.gold_coins}"
                 raise HTTPException(
                     status_code=400,
-                    detail=f"Insufficient Gold Coins. Need {cost:,} GC, you have {db_user.gold_coins:,} GC."
+                    detail=f"Insufficient Gold Coins. Need {cost_str} GC, you have {bal_str} GC."
                 )
             db_user.gold_coins -= cost
             tx = Transaction(
@@ -203,7 +208,9 @@ async def get_my_boards(session: Annotated[str, Cookie(alias="session")] = None)
                 "id": s.board.id,
                 "status": s.board.status,
                 "quarter": s.board.quarter,
+                "price_tier": s.board.price_tier,
                 "price_tier_gc": s.board.price_tier,
+                "entry_currency": s.board.entry_currency,
                 "payout_sc": int(s.board.price_tier * 10 * 0.90),
                 "winning_square_id": s.board.winning_square_id,
                 "game": {

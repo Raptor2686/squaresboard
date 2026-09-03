@@ -3,6 +3,7 @@ import { HashRouter, Routes, Route, Link, useLocation } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { ToastProvider } from "./components/Toast";
 import Marketplace from "./pages/Marketplace";
+import GameDetail from "./pages/GameDetail";
 import BoardDetail from "./pages/BoardDetail";
 import Auth from "./pages/Auth";
 import MySquares from "./pages/MySquares";
@@ -200,6 +201,7 @@ export default function App() {
             <Nav />
             <Routes>
               <Route path="/" element={<Marketplace />} />
+              <Route path="/game/:gameId" element={<GameDetail />} />
               <Route path="/board/:boardId" element={<BoardDetail />} />
               <Route path="/auth" element={<Auth />} />
               <Route path="/my-squares" element={<MySquares />} />

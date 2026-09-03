@@ -85,22 +85,24 @@ async def resolve_board(board_id: str, home_score: int, away_score: int):
         board.status = BoardStatus.RESOLVED
         board.winning_square_id = winner.id if winner else None
 
-        # Sweepstakes: 90% of GC pot → SC for winner, 10% is house
-        total_gc_pot = board.price_tier * 10
-        payout_sc = int(total_gc_pot * 0.90)
+        # Sweepstakes: 90% of pot → SC for winner, 10% is house
+        total_pot = board.price_tier * 10
+        raw_payout = total_pot * 0.90
+        payout_sc = int(raw_payout) if raw_payout.is_integer() else round(raw_payout, 2)
 
         if winner and winner.owner_id:
             # Award Sweepstakes Coins and create SweepReward audit record
             await award_sweep_coins(winner.owner_id, payout_sc, board_id, winner.id, db_session=session)
 
-        # Record house rake (GC retained, no transaction needed for house in SC model)
+        # Record house rake
+        rake_amount = round(total_pot * 0.10, 2)
         rake_tx = Transaction(
             id=str(uuid.uuid4()),
             user_id=None,
             board_id=board_id,
-            amount=int(total_gc_pot * 0.10),
+            amount=int(rake_amount) if rake_amount.is_integer() else rake_amount,
             type="rake",
-            currency="GC",
+            currency=board.entry_currency,
         )
         session.add(rake_tx)
         await session.commit()

@@ -35,7 +35,8 @@ interface BoardData {
 }
 
 function formatCoins(n: number, currency: string) {
-  return `${n.toLocaleString()} ${currency === "SC" ? "🎟️ SC" : "🟡 GC"}`;
+  const formatted = n % 1 === 0 ? n.toLocaleString() : n.toFixed(2).replace(/\.?0+$/, "");
+  return `${formatted} ${currency === "SC" ? "🎟️ SC" : "🟡 GC"}`;
 }
 
 export default function BoardDetail() {
@@ -174,6 +175,18 @@ export default function BoardDetail() {
 
   return (
     <div className="max-w-2xl mx-auto p-6 space-y-6">
+      {/* Top Navigation */}
+      <div className="flex items-center justify-between">
+        <Link
+          to={`/game/${game.id}`}
+          className="inline-flex items-center gap-2 text-zinc-400 hover:text-white text-xs font-semibold transition-colors bg-zinc-800/60 hover:bg-zinc-800 border border-zinc-700/60 rounded-xl px-3 py-1.5"
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+          </svg>
+          ← Matchup Hub
+        </Link>
+      </div>
 
       {/* Game info header */}
       <div className="bg-zinc-800/40 border border-zinc-700/60 rounded-2xl p-6 flex flex-col md:flex-row items-center justify-between gap-4">
@@ -207,8 +220,8 @@ export default function BoardDetail() {
           </div>
           <div className={`font-mono font-extrabold text-lg ${isScBoard ? "text-purple-300" : "text-yellow-400"}`}>
             {isScBoard
-              ? `${walletBalance.sweep_coins.toLocaleString()} 🎟️`
-              : `${walletBalance.gold_coins.toLocaleString()} 🟡`}
+              ? `${walletBalance.sweep_coins % 1 === 0 ? walletBalance.sweep_coins.toLocaleString() : walletBalance.sweep_coins.toFixed(2)} 🎟️`
+              : `${walletBalance.gold_coins % 1 === 0 ? walletBalance.gold_coins.toLocaleString() : walletBalance.gold_coins.toFixed(2)} 🟡`}
           </div>
         </div>
       )}
@@ -272,11 +285,11 @@ export default function BoardDetail() {
                 {userWon ? "YOU" : winningSquare.owner_name}
               </span>{" "}
               takes home{" "}
-              <span className="font-extrabold text-purple-300">{payout_sc.toLocaleString()} 🎟️ SC</span>!
+              <span className="font-extrabold text-purple-300">{payout_sc % 1 === 0 ? payout_sc.toLocaleString() : payout_sc.toFixed(2)} 🎟️ SC</span>!
             </p>
           </div>
           <div className="pt-2">
-            <Link to="/" className="text-xs font-bold text-blue-400 hover:text-blue-300 uppercase tracking-wider">
+            <Link to={`/game/${game.id}`} className="text-xs font-bold text-blue-400 hover:text-blue-300 uppercase tracking-wider">
               Play Next Board →
             </Link>
           </div>

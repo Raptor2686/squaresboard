@@ -33,13 +33,48 @@ interface Bundle {
 }
 
 function formatGC(n: number) {
-  return n.toLocaleString() + " GC";
+  return (n % 1 === 0 ? n.toLocaleString() : n.toFixed(2)) + " GC";
 }
 function formatSC(n: number) {
-  return n.toLocaleString() + " SC";
+  return (n % 1 === 0 ? n.toLocaleString() : n.toFixed(2)) + " SC";
 }
 function formatUSD(cents: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100);
+}
+
+function calculateCustomPreview(amount: number) {
+  if (!amount || isNaN(amount) || amount < 1) return null;
+  const dollars = amount;
+  const base_gc = Math.round(dollars * 100);
+  let bonus_gc = 0;
+  let bonus_sc = 0;
+  if (dollars >= 1000) {
+    bonus_gc = Math.round(base_gc * 0.50);
+    bonus_sc = Math.round(dollars * 18);
+  } else if (dollars >= 100) {
+    bonus_gc = Math.round(base_gc * 0.30);
+    bonus_sc = Math.round(dollars * 15);
+  } else if (dollars >= 50) {
+    bonus_gc = Math.round(base_gc * 0.20);
+    bonus_sc = Math.round(dollars * 14);
+  } else if (dollars >= 20) {
+    bonus_gc = Math.round(base_gc * 0.15);
+    bonus_sc = Math.round(dollars * 13);
+  } else if (dollars >= 10) {
+    bonus_gc = Math.round(base_gc * 0.10);
+    bonus_sc = Math.round(dollars * 12);
+  } else if (dollars >= 5) {
+    bonus_gc = 0;
+    bonus_sc = Math.round(dollars * 10);
+  } else {
+    bonus_gc = 0;
+    bonus_sc = Math.round(dollars * 5);
+  }
+  return {
+    total_gc: base_gc + bonus_gc,
+    bonus_gc,
+    bonus_sc,
+  };
 }
 
 export default function Wallet() {
@@ -47,7 +82,8 @@ export default function Wallet() {
   const [wallet, setWallet] = useState<WalletData | null>(null);
   const [bundles, setBundles] = useState<Bundle[]>([]);
   const [loading, setLoading] = useState(true);
-  const [redeemAmount, setRedeemAmount] = useState("500");
+  const [redeemAmount, setRedeemAmount] = useState("25");
+  const [customAmount, setCustomAmount] = useState("25");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [processing, setProcessing] = useState(false);
@@ -111,6 +147,39 @@ export default function Wallet() {
     }
   }
 
+  async function handleBuyCustom() {
+    setError("");
+    setSuccess("");
+    const parsed = parseFloat(customAmount);
+    if (isNaN(parsed) || parsed < 1) {
+      setError("Please enter a valid amount of at least $1.00.");
+      return;
+    }
+    if (parsed > 10000) {
+      setError("Maximum purchase amount is $10,000.00.");
+      return;
+    }
+
+    setProcessing(true);
+    try {
+      const res = await fetch(`${API}/wallet/buy-coins`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ custom_amount: parsed }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "Failed to initiate purchase");
+      setSelectedBundle(data.bundle);
+      setClientSecret(data.client_secret);
+      setStripePromise(loadStripe(data.publishable_key));
+    } catch (err: any) {
+      setError(err.message || "An error occurred.");
+    } finally {
+      setProcessing(false);
+    }
+  }
+
   async function handleClaimFreeSC() {
     setError("");
     setSuccess("");
@@ -136,8 +205,8 @@ export default function Wallet() {
     setError("");
     setSuccess("");
     const amount = parseInt(redeemAmount);
-    if (isNaN(amount) || amount < 500) {
-      setError("Minimum redemption is 500 SC.");
+    if (isNaN(amount) || amount < 25) {
+      setError("Minimum redemption is 25 SC ($25).");
       return;
     }
     setProcessing(true);
@@ -156,6 +225,8 @@ export default function Wallet() {
       setProcessing(false);
     }
   }
+
+  const customPreview = calculateCustomPreview(parseFloat(customAmount));
 
   if (authLoading || loading) {
     return <div className="p-8 text-center text-zinc-400">Loading wallet...</div>;
@@ -216,43 +287,124 @@ export default function Wallet() {
 
       {/* Buy Gold Coins */}
       <div className="bg-zinc-800/80 border border-zinc-700/80 rounded-2xl p-6 mb-6">
-        <h3 className="font-bold text-lg mb-1 text-zinc-200">🟡 Buy Gold Coins</h3>
-        <p className="text-xs text-zinc-400 mb-5">Gold Coins are used to enter boards. They have no cash value and cannot be redeemed for money.</p>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
+          <div>
+            <h3 className="font-bold text-lg text-zinc-200">🟡 Buy Gold Coins</h3>
+            <p className="text-xs text-zinc-400">Choose a package tier or enter a custom amount. Bonus SC included with every purchase!</p>
+          </div>
+          <span className="text-[11px] font-semibold text-amber-400 bg-amber-950/60 border border-amber-800/40 px-2.5 py-1 rounded-full w-fit">
+            $1 = 100 GC + Free SC
+          </span>
+        </div>
 
         {clientSecret && stripePromise ? (
-          <div>
+          <div className="bg-zinc-900/90 border border-zinc-700 rounded-2xl p-6">
             <p className="text-sm text-zinc-300 mb-4 font-medium">
-              Completing purchase: <span className="text-yellow-400">{selectedBundle?.label}</span> for{" "}
-              <span className="text-white">{selectedBundle ? formatUSD(selectedBundle.price_cents) : ""}</span>
+              Completing purchase: <span className="text-yellow-400 font-bold">{selectedBundle?.label}</span> for{" "}
+              <span className="text-white font-bold">{selectedBundle ? formatUSD(selectedBundle.price_cents) : ""}</span>
+              {selectedBundle && selectedBundle.bonus_sc > 0 && (
+                <span className="ml-2 text-xs text-purple-400 font-semibold">(+{selectedBundle.bonus_sc.toLocaleString()} 🎟️ SC)</span>
+              )}
             </p>
             <Elements stripe={stripePromise} options={{ clientSecret }}>
               <CheckoutForm onCancel={() => { setClientSecret(""); setSelectedBundle(null); }} />
             </Elements>
           </div>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            {bundles.map((bundle) => (
-              <button
-                key={bundle.id}
-                onClick={() => handleBuyBundle(bundle)}
-                disabled={processing}
-                className="relative flex flex-col items-center justify-center bg-zinc-900 border border-zinc-700 hover:border-yellow-500 rounded-xl p-4 transition-all group disabled:opacity-50 gap-0.5"
-              >
-                {bundle.bonus && (
-                  <span className="absolute -top-2 left-1/2 -translate-x-1/2 bg-yellow-500 text-black text-[10px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap">
-                    {bundle.bonus}
-                  </span>
-                )}
-                <span className="text-2xl mb-1">🟡</span>
-                <span className="font-bold text-yellow-400 text-sm">{bundle.label}</span>
-                <span className="text-zinc-400 text-xs">{formatUSD(bundle.price_cents)}</span>
-                {bundle.bonus_sc > 0 && (
-                  <span className="mt-1.5 text-[10px] font-semibold text-purple-400 bg-purple-950/60 border border-purple-800/40 px-2 py-0.5 rounded-full">
-                    +{bundle.bonus_sc.toLocaleString()} 🎟️ SC
-                  </span>
-                )}
-              </button>
-            ))}
+          <div className="space-y-6">
+            {/* Preset Tiers Grid */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+              {bundles.map((bundle) => (
+                <button
+                  key={bundle.id}
+                  onClick={() => handleBuyBundle(bundle)}
+                  disabled={processing}
+                  className="relative flex flex-col items-center justify-center bg-zinc-900 border border-zinc-700 hover:border-yellow-500 hover:bg-zinc-850 rounded-xl p-4 transition-all group disabled:opacity-50 gap-0.5 shadow-md"
+                >
+                  {bundle.bonus && (
+                    <span className="absolute -top-2 left-1/2 -translate-x-1/2 bg-yellow-500 text-black text-[10px] font-extrabold px-2 py-0.5 rounded-full whitespace-nowrap shadow-sm">
+                      {bundle.bonus}
+                    </span>
+                  )}
+                  <span className="text-2xl mb-1">🟡</span>
+                  <span className="font-bold text-yellow-400 text-sm">{bundle.label}</span>
+                  <span className="text-white font-semibold text-xs mt-0.5">{formatUSD(bundle.price_cents)}</span>
+                  {bundle.bonus_sc > 0 && (
+                    <span className="mt-1.5 text-[10px] font-semibold text-purple-300 bg-purple-950/80 border border-purple-800/60 px-2 py-0.5 rounded-full">
+                      +{bundle.bonus_sc.toLocaleString()} 🎟️ SC
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+
+            {/* Custom Purchase Amount Section */}
+            <div className="bg-gradient-to-br from-zinc-900 via-zinc-900 to-yellow-950/20 border border-zinc-700/80 rounded-xl p-5">
+              <div className="flex items-center justify-between gap-2 mb-3">
+                <span className="text-xs font-bold text-zinc-300 uppercase tracking-wider flex items-center gap-1.5">
+                  <span>✨</span> Custom Purchase Amount
+                </span>
+                <span className="text-xs text-zinc-500">Min $1.00 · Max $10,000</span>
+              </div>
+
+              {/* Quick Pick Chips */}
+              <div className="flex flex-wrap gap-2 mb-4">
+                {["15", "25", "75", "250", "500"].map((quickVal) => (
+                  <button
+                    key={quickVal}
+                    type="button"
+                    onClick={() => setCustomAmount(quickVal)}
+                    className={`px-3 py-1 text-xs font-semibold rounded-lg border transition-all ${
+                      customAmount === quickVal
+                        ? "bg-yellow-500/20 border-yellow-500 text-yellow-300"
+                        : "bg-zinc-800 border-zinc-700 text-zinc-400 hover:border-zinc-600 hover:text-white"
+                    }`}
+                  >
+                    ${quickVal}
+                  </button>
+                ))}
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-center">
+                <div className="relative">
+                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400 font-bold">$</span>
+                  <input
+                    type="number"
+                    min="1"
+                    max="10000"
+                    step="1"
+                    value={customAmount}
+                    onChange={(e) => setCustomAmount(e.target.value)}
+                    placeholder="Enter amount"
+                    className="w-full bg-zinc-950 border border-zinc-700 rounded-xl pl-8 pr-4 py-2.5 text-white font-mono font-bold focus:outline-none focus:border-yellow-500 text-base"
+                  />
+                </div>
+
+                <div className="bg-zinc-950/80 border border-zinc-800 rounded-xl px-4 py-2 flex flex-col justify-center">
+                  <div className="text-[11px] text-zinc-400 flex items-center justify-between">
+                    <span>You Receive:</span>
+                    {customPreview && customPreview.bonus_gc > 0 && (
+                      <span className="text-yellow-500 font-bold text-[10px]">+{customPreview.bonus_gc.toLocaleString()} Bonus GC</span>
+                    )}
+                  </div>
+                  <div className="font-bold text-yellow-400 text-sm font-mono mt-0.5">
+                    {customPreview ? `${customPreview.total_gc.toLocaleString()} 🟡 GC` : "0 GC"}
+                  </div>
+                  <div className="text-[11px] text-purple-400 font-semibold font-mono mt-0.5">
+                    {customPreview && customPreview.bonus_sc > 0 ? `+${customPreview.bonus_sc.toLocaleString()} 🎟️ SC Bonus` : ""}
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleBuyCustom}
+                  disabled={processing || !customPreview}
+                  className="w-full bg-gradient-to-r from-yellow-500 to-amber-500 hover:from-yellow-400 hover:to-amber-400 text-black font-extrabold py-2.5 px-4 rounded-xl transition-all shadow-lg shadow-yellow-950/20 disabled:opacity-50 text-sm"
+                >
+                  {processing ? "Processing..." : `Buy for $${customAmount || 0}`}
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>
@@ -260,14 +412,14 @@ export default function Wallet() {
       {/* Redeem SC */}
       <div className="bg-zinc-800/80 border border-zinc-700/80 rounded-2xl p-6 mb-6">
         <h3 className="font-bold text-lg mb-1 text-zinc-200">🎟️ Redeem Sweepstakes Coins</h3>
-        <p className="text-xs text-zinc-400 mb-5">Redeem for gift cards, merch, or other prizes. Minimum 500 SC. Processing takes 3-5 business days.</p>
+        <p className="text-xs text-zinc-400 mb-5">Redeem for gift cards, merch, or other prizes. Minimum 25 SC ($25). Processing takes 3-5 business days.</p>
         <form onSubmit={handleRedeem} className="flex gap-3 items-end">
           <div className="flex-1">
             <label className="block text-xs font-semibold text-zinc-400 uppercase mb-2">Amount (SC)</label>
             <input
               type="number"
-              min="500"
-              step="50"
+              min="25"
+              step="5"
               value={redeemAmount}
               onChange={(e) => setRedeemAmount(e.target.value)}
               className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-2.5 text-white font-mono focus:outline-none focus:border-purple-500"

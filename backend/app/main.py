@@ -83,21 +83,10 @@ def _run_migrations():
             cur.execute(ddl)
             applied.append(f"users.{col}")
 
-    # ── boards: entry_currency + int price_tier ───────────────────────────────
+    # ── boards: entry_currency column ─────────────────────────────────────────
     if not col_exists("boards", "entry_currency"):
         cur.execute("ALTER TABLE boards ADD COLUMN entry_currency VARCHAR(5) NOT NULL DEFAULT 'GC'")
         applied.append("boards.entry_currency")
-
-    # Convert old float dollar price_tiers to int GC amounts
-    float_to_gc = {0.5: 50, 1.0: 50, 2.0: 100, 5.0: 100, 10.0: 100,
-                   20.0: 250, 50.0: 500, 100.0: 1000, 1000.0: 2500, 10000.0: 2500}
-    cur.execute("SELECT id, price_tier FROM boards")
-    for b in cur.fetchall():
-        old = b["price_tier"]
-        if isinstance(old, float) or (old is not None and float(old) < 50):
-            new_tier = float_to_gc.get(float(old), 100)
-            cur.execute("UPDATE boards SET price_tier = ? WHERE id = ?", (new_tier, b["id"]))
-            applied.append(f"boards.price_tier converted ({old}->{new_tier})")
 
     # ── games: team logos ─────────────────────────────────────────────────────
     for col, ddl in [
@@ -156,7 +145,7 @@ def _run_migrations():
     if applied:
         print(f"[migrate] Applied {len(applied)} migration(s):")
         for a in applied:
-            print(f"  ✓ {a}")
+            print(f"  + {a}")
     else:
         print("[migrate] Schema already up to date.")
 
@@ -180,17 +169,24 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+frontend_origins = [
+    url.strip().rstrip("/")
+    for url in settings.FRONTEND_URL.split(",")
+    if url.strip()
+]
+
 ALLOWED_ORIGINS = [
     "http://localhost:5173",
     "https://localhost:5173",
+    "http://localhost:3000",
     "http://localhost",
     "capacitor://localhost",
-    settings.FRONTEND_URL,
+    *frontend_origins,
 ]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[o for o in ALLOWED_ORIGINS if o],
+    allow_origins=[o for o in set(ALLOWED_ORIGINS) if o],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

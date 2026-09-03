@@ -123,14 +123,12 @@ async def _get_user_from_token(token: str | None) -> User | None:
 
 
 def _set_cookie(response: Response, token: str):
-    is_dev = settings.SECRET_KEY == "dev-secret-change-in-production"
+    is_dev = "localhost" in settings.FRONTEND_URL or "127.0.0.1" in settings.FRONTEND_URL
     response.set_cookie(
         key="session",
         value=token,
         httponly=True,
-        secure=True,          # always True — required for SameSite=none
-        samesite="none",      # cross-origin: frontend (zo.space) → backend (render.com)
+        secure=not is_dev,
+        samesite="lax" if is_dev else "none",
         max_age=60 * 60 * 24 * SESSION_MAX_AGE_DAYS,
-        # In dev, the browser will reject SameSite=none without HTTPS,
-        # so use localhost with the frontend also on localhost.
     )

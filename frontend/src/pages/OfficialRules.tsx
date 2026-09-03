@@ -143,7 +143,7 @@ export default function OfficialRules() {
             <li>Charitable donation credits</li>
           </ul>
           <p className="mt-3">
-            Minimum redemption is 500 SC. Prize fulfillment occurs within 3–5 business days of a valid
+            Minimum redemption is 25 SC ($25 equivalent). Prize fulfillment occurs within 3–5 business days of a valid
             redemption request. Prizes are non-transferable and have no cash equivalent.
           </p>
         </Section>
@@ -151,7 +151,7 @@ export default function OfficialRules() {
         <Section title="9. Prize Redemption">
           <p>
             To redeem SC for a prize, log in and visit the Wallet page. Enter the number of SC you wish to
-            redeem (minimum 500 SC) and submit a redemption request. Sponsor will contact you at the email
+            redeem (minimum 25 SC) and submit a redemption request. Sponsor will contact you at the email
             address on file to fulfill your prize selection.
           </p>
         </Section>

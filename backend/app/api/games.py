@@ -50,14 +50,22 @@ async def get_game(game_id: str):
         result = await session.execute(select(Game).where(Game.id == game_id))
         game = result.scalar_one_or_none()
         if not game:
-            return {"error": "Game not found"}
+            from fastapi import HTTPException
+            raise HTTPException(status_code=404, detail="Game not found")
         return {
             "id": game.id,
-            "sport": game.sport,
+            "external_id": game.external_id,
+            "sport": game.sport.value if hasattr(game.sport, "value") else str(game.sport),
             "home_team": game.home_team,
             "away_team": game.away_team,
+            "home_team_logo": game.home_team_logo,
+            "away_team_logo": game.away_team_logo,
             "event_time": game.event_time.isoformat(),
+            "q1_start": game.q1_start.isoformat() if game.q1_start else None,
+            "q2_start": game.q2_start.isoformat() if game.q2_start else None,
+            "q3_start": game.q3_start.isoformat() if game.q3_start else None,
+            "q4_start": game.q4_start.isoformat() if game.q4_start else None,
             "home_score": game.home_score,
             "away_score": game.away_score,
-            "status": game.status,
+            "status": game.status.value if hasattr(game.status, "value") else str(game.status),
         }

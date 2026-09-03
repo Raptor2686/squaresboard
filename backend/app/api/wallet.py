@@ -12,15 +12,62 @@ router = APIRouter()
 
 # ---------------------------------------------------------------------------
 # Gold Coin bundles: real money → GC (no cash value)
-# Designed so $1 ≈ 100 GC. Bonus coins incentivize bigger purchases.
+# $5, $10, $20, $50, $100, $1000 packages with bonus GC & SC
 # ---------------------------------------------------------------------------
 GC_BUNDLES = [
-    {"id": "gc_200",   "price_cents": 199,   "gold_coins": 200,   "bonus_sc": 25,   "label": "200 GC",   "bonus": ""},
-    {"id": "gc_600",   "price_cents": 499,   "gold_coins": 650,   "bonus_sc": 75,   "label": "650 GC",   "bonus": "+50 Bonus"},
-    {"id": "gc_1200",  "price_cents": 999,   "gold_coins": 1400,  "bonus_sc": 175,  "label": "1,400 GC", "bonus": "+200 Bonus"},
-    {"id": "gc_3000",  "price_cents": 1999,  "gold_coins": 3500,  "bonus_sc": 450,  "label": "3,500 GC", "bonus": "+500 Bonus"},
-    {"id": "gc_7500",  "price_cents": 4999,  "gold_coins": 10000, "bonus_sc": 1250, "label": "10,000 GC","bonus": "+2,500 Bonus"},
+    {"id": "gc_5",    "price_cents": 500,    "gold_coins": 500,    "bonus_sc": 50,    "label": "500 GC",    "bonus": ""},
+    {"id": "gc_10",   "price_cents": 1000,   "gold_coins": 1100,   "bonus_sc": 120,   "label": "1,100 GC",  "bonus": "+100 Bonus"},
+    {"id": "gc_20",   "price_cents": 2000,   "gold_coins": 2300,   "bonus_sc": 260,   "label": "2,300 GC",  "bonus": "+300 Bonus"},
+    {"id": "gc_50",   "price_cents": 5000,   "gold_coins": 6000,   "bonus_sc": 700,   "label": "6,000 GC",  "bonus": "+1,000 Bonus"},
+    {"id": "gc_100",  "price_cents": 10000,  "gold_coins": 13000,  "bonus_sc": 1500,  "label": "13,000 GC", "bonus": "+3,000 Bonus"},
+    {"id": "gc_1000", "price_cents": 100000, "gold_coins": 150000, "bonus_sc": 18000, "label": "150,000 GC","bonus": "+50,000 Bonus"},
 ]
+
+
+def calculate_custom_bundle(amount_usd: float) -> dict:
+    """Calculate Gold Coins and bonus Sweepstakes Coins for any custom USD amount."""
+    if amount_usd < 1:
+        raise ValueError("Minimum purchase amount is $1.00")
+    if amount_usd > 10000:
+        raise ValueError("Maximum purchase amount is $10,000.00")
+
+    price_cents = int(round(amount_usd * 100))
+    dollars = price_cents / 100.0
+    base_gc = int(round(dollars * 100))
+
+    if dollars >= 1000:
+        bonus_gc = int(round(base_gc * 0.50))
+        bonus_sc = int(round(dollars * 18))
+    elif dollars >= 100:
+        bonus_gc = int(round(base_gc * 0.30))
+        bonus_sc = int(round(dollars * 15))
+    elif dollars >= 50:
+        bonus_gc = int(round(base_gc * 0.20))
+        bonus_sc = int(round(dollars * 14))
+    elif dollars >= 20:
+        bonus_gc = int(round(base_gc * 0.15))
+        bonus_sc = int(round(dollars * 13))
+    elif dollars >= 10:
+        bonus_gc = int(round(base_gc * 0.10))
+        bonus_sc = int(round(dollars * 12))
+    elif dollars >= 5:
+        bonus_gc = 0
+        bonus_sc = int(round(dollars * 10))
+    else:
+        bonus_gc = 0
+        bonus_sc = int(round(dollars * 5))
+
+    total_gc = base_gc + bonus_gc
+    return {
+        "id": f"custom_{price_cents}",
+        "price_cents": price_cents,
+        "gold_coins": total_gc,
+        "bonus_sc": bonus_sc,
+        "label": f"{total_gc:,} GC",
+        "bonus": f"+{bonus_gc:,} Bonus" if bonus_gc > 0 else "",
+        "is_custom": True,
+    }
+
 
 FREE_SC_DAILY = 50   # Sweepstakes Coins granted per day — the "no purchase necessary" mechanism
 
@@ -76,19 +123,49 @@ async def list_bundles():
     return GC_BUNDLES
 
 
+@router.get("/calculate-bundle")
+async def calculate_bundle_quote(amount: float):
+    """Calculate GC and SC bonus for a custom USD amount."""
+    try:
+        return calculate_custom_bundle(amount)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+class BuyCoinsRequest(BaseModel):
+    bundle_id: str | None = None
+    custom_amount: float | None = None
+
+
 @router.post("/buy-coins")
 async def buy_gold_coins(
-    bundle_id: str,
+    req: BuyCoinsRequest | None = None,
+    bundle_id: str | None = None,
+    custom_amount: float | None = None,
     token: Annotated[str | None, Cookie(alias="session")] = None,
 ):
-    """Create a Stripe PaymentIntent for purchasing a Gold Coin bundle."""
+    """Create a Stripe PaymentIntent for purchasing a Gold Coin bundle or custom amount."""
     user = await _get_user_from_token(token)
     if not user:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
-    bundle = next((b for b in GC_BUNDLES if b["id"] == bundle_id), None)
+    b_id = (req.bundle_id if req and req.bundle_id else bundle_id)
+    c_amt = (req.custom_amount if req and req.custom_amount is not None else custom_amount)
+
+    bundle = None
+    if b_id:
+        bundle = next((b for b in GC_BUNDLES if b["id"] == b_id), None)
+        if not bundle and not c_amt:
+            raise HTTPException(status_code=400, detail="Invalid bundle ID")
+
+    if not bundle and c_amt is not None:
+        try:
+            bundle = calculate_custom_bundle(float(c_amt))
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
     if not bundle:
-        raise HTTPException(status_code=400, detail="Invalid bundle ID")
+        raise HTTPException(status_code=400, detail="Either bundle_id or custom_amount is required")
 
     async with async_session() as db:
         result = await db.execute(select(User).where(User.id == user.id))
@@ -113,7 +190,7 @@ async def buy_gold_coins(
             metadata={
                 "user_id": db_user.id,
                 "type": "gc_purchase",
-                "bundle_id": bundle_id,
+                "bundle_id": bundle["id"],
                 "gold_coins": bundle["gold_coins"],
                 "bonus_sc": bundle["bonus_sc"],
             },
@@ -179,14 +256,14 @@ async def redeem_sweep_coins(
     """
     Request a Sweepstakes Coin redemption for a prize.
     For MVP: records the request and deducts SC. Fulfillment is manual.
-    Min redemption: 500 SC.
+    Min redemption: 25 SC ($25).
     """
     user = await _get_user_from_token(token)
     if not user:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
-    if amount < 500:
-        raise HTTPException(status_code=400, detail="Minimum redemption is 500 SC")
+    if amount < 25:
+        raise HTTPException(status_code=400, detail="Minimum redemption is 25 SC ($25)")
 
     async with async_session() as db:
         result = await db.execute(select(User).where(User.id == user.id))

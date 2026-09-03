@@ -53,15 +53,38 @@ async def create_mock_game(data: MockGameRequest):
         await session.commit()
         await session.refresh(game)
 
-        # Create one Q1 board and Q2 board for testing at $1, $5 price tiers
-        PRICE_TIERS = [1.0, 5.0]
+        # Create Q1 and Q2 boards for testing with GC and SC
         for quarter in [Quarter.Q1, Quarter.Q2]:
-            for price in PRICE_TIERS:
+            for price in [50, 100]:
                 board = Board(
                     id=str(uuid.uuid4()),
                     game_id=game.id,
                     quarter=quarter,
                     price_tier=price,
+                    entry_currency="GC",
+                    status=BoardStatus.OPEN,
+                    is_private=False,
+                )
+                session.add(board)
+                await session.flush()
+
+                # Pre-create 10 empty squares
+                for pos in range(10):
+                    square = Square(
+                        id=str(uuid.uuid4()),
+                        board_id=board.id,
+                        position=pos,
+                    )
+                    session.add(square)
+                await session.commit()
+
+            for price in [0.5, 5, 10]:
+                board = Board(
+                    id=str(uuid.uuid4()),
+                    game_id=game.id,
+                    quarter=quarter,
+                    price_tier=price,
+                    entry_currency="SC",
                     status=BoardStatus.OPEN,
                     is_private=False,
                 )
@@ -121,7 +144,8 @@ async def fill_mock_players(board_id: str):
                     email=email,
                     password_hash="mock-pass",
                     display_name=f"Player {email.split('_')[2].split('@')[0].upper()}",
-                    balance_cents=10000,  # $100 starting balance
+                    gold_coins=10000,
+                    sweep_coins=500,
                 )
                 session.add(user)
                 await session.flush()
@@ -209,7 +233,8 @@ async def resolve_board_manually(board_id: str, data: ResolveBoardRequest):
 
 
 class CreditRequest(BaseModel):
-    amount_cents: int
+    amount: int
+    currency: str = "GC"  # "GC" or "SC"
 
 
 @router.post("/wallet/credit")
@@ -218,23 +243,38 @@ async def credit_wallet_sandbox(data: CreditRequest, token: Annotated[str | None
     if not user:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
-    if data.amount_cents <= 0:
+    if data.amount <= 0:
         raise HTTPException(status_code=400, detail="Amount must be positive")
+
+    currency = data.currency.upper()
+    if currency not in ["GC", "SC"]:
+        raise HTTPException(status_code=400, detail="Currency must be GC or SC")
 
     async with async_session() as session:
         db_user = await session.get(User, user.id)
         if not db_user:
             raise HTTPException(status_code=404, detail="User not found")
 
-        db_user.balance_cents += data.amount_cents
+        if currency == "SC":
+            db_user.sweep_coins += data.amount
+        else:
+            db_user.gold_coins += data.amount
+
         tx = Transaction(
             id=str(uuid.uuid4()),
             user_id=user.id,
-            amount_cents=data.amount_cents,
+            amount=data.amount,
+            currency=currency,
             type="sandbox_credit",
             reference_id=str(uuid.uuid4()),
         )
         session.add(tx)
         await session.commit()
 
-    return {"ok": True, "new_balance_cents": db_user.balance_cents}
+    return {
+        "ok": True,
+        "currency": currency,
+        "amount_credited": data.amount,
+        "new_gold_coins": db_user.gold_coins,
+        "new_sweep_coins": db_user.sweep_coins,
+    }

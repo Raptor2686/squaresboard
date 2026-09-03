@@ -11,7 +11,8 @@ interface Game {
   status: string;
 }
 
-const PRICE_TIERS = [0.50, 1, 2, 5, 10, 20, 50, 100, 1000, 10000];
+const GC_TIERS = [50, 100, 500, 1000, 2000, 5000, 10000, 100000];
+const SC_TIERS = [0.5, 1, 5, 10, 20, 50, 100, 1000];
 const QUARTERS = ["Q1", "Q2", "Q3", "Q4"];
 
 export default function CreateBoard() {
@@ -19,13 +20,14 @@ export default function CreateBoard() {
   const [games, setGames] = useState<Game[]>([]);
   const [loadingGames, setLoadingGames] = useState(true);
 
+  const [currency, setCurrency] = useState<"GC" | "SC">("GC");
   const [selectedGameId, setSelectedGameId] = useState("");
   const [selectedQuarter, setSelectedQuarter] = useState("Q1");
-  const [selectedPrice, setSelectedPrice] = useState(5);
+  const [selectedPrice, setSelectedPrice] = useState(100);
   const [isPrivate, setIsPrivate] = useState(false);
 
   const [error, setError] = useState("");
-  const [createdBoard, setCreatedBoard] = useState<{ id: string; share_link: string | null } | null>(null);
+  const [createdBoard, setCreatedBoard] = useState<{ id: string; share_link: string | null; entry_currency?: string } | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [copied, setCopied] = useState(false);
 
@@ -46,6 +48,12 @@ export default function CreateBoard() {
       });
   }, []);
 
+  // Update default price tier when switching currency
+  const handleCurrencyChange = (newCurr: "GC" | "SC") => {
+    setCurrency(newCurr);
+    setSelectedPrice(newCurr === "GC" ? 100 : 5);
+  };
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!selectedGameId) {
@@ -61,6 +69,7 @@ export default function CreateBoard() {
         game_id: selectedGameId,
         quarter: selectedQuarter,
         price_tier: String(selectedPrice),
+        entry_currency: currency,
         is_private: String(isPrivate),
       });
 
@@ -96,6 +105,10 @@ export default function CreateBoard() {
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }
+
+  const currentTiers = currency === "GC" ? GC_TIERS : SC_TIERS;
+  const rawPayout = selectedPrice * 10 * 0.90;
+  const estimatedPayoutSC = rawPayout % 1 === 0 ? rawPayout.toLocaleString() : rawPayout.toFixed(2);
 
   if (authLoading) return <div className="p-8 text-center text-zinc-400">Loading...</div>;
 
@@ -138,7 +151,7 @@ export default function CreateBoard() {
           <div>
             <h2 className="text-2xl font-extrabold text-white">Board Created Successfully!</h2>
             <p className="text-zinc-400 text-sm mt-2">
-              Your {isPrivate ? "private" : "public"} board for {selectedQuarter} is ready.
+              Your {isPrivate ? "private" : "public"} {currency === "SC" ? "🎟️ SC" : "🟡 GC"} board for {selectedQuarter} is ready.
             </p>
           </div>
 
@@ -180,6 +193,37 @@ export default function CreateBoard() {
       ) : (
         <div className="bg-zinc-800 border border-zinc-700 rounded-2xl p-6">
           <form onSubmit={handleSubmit} className="space-y-6">
+            {/* Currency toggle */}
+            <div>
+              <label className="block text-xs font-semibold text-zinc-400 uppercase mb-2">Entry Currency</label>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => handleCurrencyChange("GC")}
+                  className={`p-3 rounded-xl border flex flex-col items-center gap-1 transition-all ${
+                    currency === "GC"
+                      ? "bg-yellow-950/40 border-yellow-500 text-yellow-300 ring-1 ring-yellow-500/50"
+                      : "bg-zinc-900 border-zinc-700 text-zinc-400 hover:border-zinc-600"
+                  }`}
+                >
+                  <span className="text-base font-black">🟡 Gold Coins (GC)</span>
+                  <span className="text-[11px] opacity-75">Standard Play (Purchased)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleCurrencyChange("SC")}
+                  className={`p-3 rounded-xl border flex flex-col items-center gap-1 transition-all ${
+                    currency === "SC"
+                      ? "bg-purple-950/40 border-purple-500 text-purple-300 ring-1 ring-purple-500/50"
+                      : "bg-zinc-900 border-zinc-700 text-zinc-400 hover:border-zinc-600"
+                  }`}
+                >
+                  <span className="text-base font-black">🎟️ Sweep Coins (SC)</span>
+                  <span className="text-[11px] opacity-75">Prize Play (Free / Won)</span>
+                </button>
+              </div>
+            </div>
+
             {/* Game selection */}
             <div>
               <label className="block text-xs font-semibold text-zinc-400 uppercase mb-2">Select Game</label>
@@ -191,7 +235,7 @@ export default function CreateBoard() {
                 <select
                   value={selectedGameId}
                   onChange={(e) => setSelectedGameId(e.target.value)}
-                  className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-blue-500"
+                  className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-blue-500 text-sm"
                   required
                 >
                   {games.map((g) => (
@@ -226,20 +270,29 @@ export default function CreateBoard() {
 
             {/* Price tier selection */}
             <div>
-              <label className="block text-xs font-semibold text-zinc-400 uppercase mb-2">Price Tier per Square</label>
-              <div className="grid grid-cols-5 gap-2">
-                {PRICE_TIERS.map((p) => (
+              <div className="flex justify-between items-center mb-2">
+                <label className="text-xs font-semibold text-zinc-400 uppercase">
+                  Entry Cost per Square ({currency})
+                </label>
+                <span className="text-xs text-purple-400 font-semibold">
+                  Winner Payout: {estimatedPayoutSC} 🎟️ SC
+                </span>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {currentTiers.map((p) => (
                   <button
                     key={p}
                     type="button"
                     onClick={() => setSelectedPrice(p)}
-                    className={`py-2 rounded-lg font-mono text-xs transition-all border ${
+                    className={`py-2 px-1 rounded-lg font-mono text-xs font-bold transition-all border ${
                       selectedPrice === p
-                        ? "bg-green-600/20 border-green-500 text-green-300 font-bold"
-                        : "bg-zinc-900 border-zinc-700 text-zinc-400 hover:border-zinc-600"
+                        ? currency === "GC"
+                          ? "bg-yellow-600/20 border-yellow-500 text-yellow-300 font-bold shadow-sm"
+                          : "bg-purple-600/20 border-purple-500 text-purple-300 font-bold shadow-sm"
+                        : "bg-zinc-900 border-zinc-700 text-zinc-400 hover:border-zinc-600 hover:text-white"
                     }`}
                   >
-                    ${p}
+                    {p % 1 === 0 ? p.toLocaleString() : p} {currency}
                   </button>
                 ))}
               </div>
@@ -268,9 +321,9 @@ export default function CreateBoard() {
             <button
               type="submit"
               disabled={submitting}
-              className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-medium py-3 rounded-xl transition-all shadow-lg shadow-blue-950/20 disabled:opacity-50 text-sm uppercase tracking-wider"
+              className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-medium py-3 rounded-xl transition-all shadow-lg shadow-blue-950/20 disabled:opacity-50 text-sm uppercase tracking-wider font-bold"
             >
-              {submitting ? "Creating Board..." : "Create Board"}
+              {submitting ? "Creating Board..." : `Create ${currency} Board`}
             </button>
           </form>
         </div>
