@@ -27,8 +27,8 @@ async def stripe_webhook(request: Request):
 
         if meta.get("type") == "gc_purchase":
             user_id = meta.get("user_id")
-            gold_coins = int(meta.get("gold_coins", 0))
-            bonus_sc = int(meta.get("bonus_sc", 0))
+            gold_coins = float(meta.get("gold_coins", 0))
+            bonus_sc = float(meta.get("bonus_sc", 0))
             bundle_id = meta.get("bundle_id", "unknown")
 
             if user_id and gold_coins > 0:
