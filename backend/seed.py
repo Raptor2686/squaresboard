@@ -100,6 +100,8 @@ async def seed():
             await session.commit()
 
             # Create boards for each quarter × price tier × currency
+            new_boards = []
+            new_squares = []
             for quarter in [Quarter.Q1, Quarter.Q2, Quarter.Q3, Quarter.Q4]:
                 # GC boards
                 for price in PRICE_TIERS:
@@ -112,17 +114,13 @@ async def seed():
                         status=BoardStatus.OPEN,
                         is_private=False,
                     )
-                    session.add(board)
-                    await session.commit()
-
+                    new_boards.append(board)
                     for pos in range(10):
-                        square = Square(
+                        new_squares.append(Square(
                             id=str(uuid.uuid4()),
                             board_id=board.id,
                             position=pos,
-                        )
-                        session.add(square)
-                    await session.commit()
+                        ))
 
                 # SC boards
                 for price in SC_PRICE_TIERS:
@@ -135,17 +133,17 @@ async def seed():
                         status=BoardStatus.OPEN,
                         is_private=False,
                     )
-                    session.add(board)
-                    await session.commit()
-
+                    new_boards.append(board)
                     for pos in range(10):
-                        square = Square(
+                        new_squares.append(Square(
                             id=str(uuid.uuid4()),
                             board_id=board.id,
                             position=pos,
-                        )
-                        session.add(square)
-                    await session.commit()
+                        ))
+
+            session.add_all(new_boards)
+            session.add_all(new_squares)
+            await session.commit()
 
             print(f"Seeded: {gdata['away_team']} @ {gdata['home_team']} ({sport.value})")
 

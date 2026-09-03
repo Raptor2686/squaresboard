@@ -69,3 +69,23 @@ async def get_game(game_id: str):
             "away_score": game.away_score,
             "status": game.status.value if hasattr(game.status, "value") else str(game.status),
         }
+
+
+@router.post("/refresh")
+async def refresh_games():
+    """Manually trigger game ingestion from sports API and seed if DB is empty."""
+    from app.services import game_ingestion
+    from seed import seed as run_seed
+
+    try:
+        await game_ingestion.run()
+    except Exception as e:
+        print(f"[games/refresh] Ingestion error: {e}")
+
+    async with async_session() as session:
+        result = await session.execute(select(Game).limit(1))
+        if result.scalar_one_or_none() is None:
+            await run_seed()
+
+    return {"status": "ok", "message": "Games refreshed successfully"}
+

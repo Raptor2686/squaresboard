@@ -155,6 +155,24 @@ async def lifespan(app: FastAPI):
     # Startup
     _run_migrations()        # idempotent — safe on every boot
     await init_db()
+
+    # Automatically seed initial games & boards if database is empty
+    try:
+        from app.database import async_session
+        from app.models import Game
+        from sqlalchemy import select
+        async with async_session() as session:
+            res = await session.execute(select(Game).limit(1))
+            if res.scalar_one_or_none() is None:
+                print("[startup] No games found in database. Auto-seeding default games and boards...")
+                from seed import seed as run_seed
+                await run_seed()
+    except Exception as e:
+        print(f"[startup] Failed to check/seed default games: {e}")
+
+    # Kick off live sports ingestion in the background on startup
+    asyncio.create_task(game_ingestion.run())
+
     scheduler.add_job(game_ingestion.run, "interval", hours=6, id="game_ingestion")
     scheduler.add_job(score_polling.poll_active_boards, "interval", minutes=5, id="score_polling")
     scheduler.start()
