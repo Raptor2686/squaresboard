@@ -1,95 +1,137 @@
-import { createContext, useContext, useState, useCallback, ReactNode } from "react";
+import { createContext, useContext, useState, useCallback, ReactNode, useEffect } from "react";
 
 type ToastType = "success" | "error" | "info" | "win";
 
 interface Toast {
-  id: string;
-  type: ToastType;
+  id: number;
   message: string;
+  type: ToastType;
+  exiting?: boolean;
 }
 
 interface ToastContextType {
   showToast: (message: string, type?: ToastType) => void;
 }
 
-const ToastContext = createContext<ToastContextType>({ showToast: () => {} });
+const ToastContext = createContext<ToastContextType>({
+  showToast: () => {},
+});
 
 export function useToast() {
   return useContext(ToastContext);
 }
 
-const ICONS: Record<ToastType, React.ReactNode> = {
-  success: (
-    <svg className="w-5 h-5 text-green-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-    </svg>
-  ),
-  error: (
-    <svg className="w-5 h-5 text-red-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-        d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-    </svg>
-  ),
-  info: (
-    <svg className="w-5 h-5 text-blue-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-        d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-    </svg>
-  ),
-  win: (
-    <span className="text-xl flex-shrink-0">🏆</span>
-  ),
+const TOAST_ICONS: Record<ToastType, string> = {
+  success: "✅",
+  error: "❌",
+  info: "💡",
+  win: "🏆",
 };
 
-const STYLES: Record<ToastType, string> = {
-  success: "bg-zinc-900 border-green-700/60 text-green-300",
-  error:   "bg-zinc-900 border-red-700/60 text-red-300",
-  info:    "bg-zinc-900 border-blue-700/60 text-blue-300",
-  win:     "bg-gradient-to-r from-yellow-950 to-amber-950 border-yellow-600/60 text-yellow-200",
+const TOAST_STYLES: Record<ToastType, string> = {
+  success:
+    "bg-emerald-950/90 border-emerald-500/30 text-emerald-100 shadow-glow-green",
+  error:
+    "bg-red-950/90 border-red-500/30 text-red-100",
+  info:
+    "bg-brand-950/90 border-brand-500/30 text-brand-100 shadow-glow-blue",
+  win:
+    "bg-gradient-to-r from-amber-950/90 via-yellow-950/90 to-amber-950/90 border-yellow-500/40 text-yellow-100 shadow-glow-gold",
 };
+
+const TOAST_DURATION = 4000;
+let idCounter = 0;
+
+function ToastItem({ toast, onRemove }: { toast: Toast; onRemove: (id: number) => void }) {
+  const [progress, setProgress] = useState(100);
+
+  useEffect(() => {
+    const start = Date.now();
+    const interval = setInterval(() => {
+      const elapsed = Date.now() - start;
+      const pct = Math.max(0, 100 - (elapsed / TOAST_DURATION) * 100);
+      setProgress(pct);
+      if (pct <= 0) clearInterval(interval);
+    }, 30);
+    return () => clearInterval(interval);
+  }, []);
+
+  const barColor = {
+    success: "bg-emerald-400",
+    error: "bg-red-400",
+    info: "bg-brand-400",
+    win: "bg-yellow-400",
+  }[toast.type];
+
+  return (
+    <div
+      className={`
+        relative overflow-hidden rounded-2xl border backdrop-blur-xl px-4 py-3.5
+        flex items-start gap-3 min-w-[280px] max-w-[420px] cursor-pointer
+        transition-all duration-300
+        ${toast.exiting ? "opacity-0 translate-x-full scale-95" : "animate-slideInRight"}
+        ${TOAST_STYLES[toast.type]}
+      `}
+      onClick={() => onRemove(toast.id)}
+      role="alert"
+    >
+      {/* Icon */}
+      <span className="text-lg flex-shrink-0 mt-0.5">{TOAST_ICONS[toast.type]}</span>
+
+      {/* Message */}
+      <p className="text-sm font-medium leading-snug flex-1">{toast.message}</p>
+
+      {/* Close button */}
+      <button
+        onClick={(e) => { e.stopPropagation(); onRemove(toast.id); }}
+        className="text-white/30 hover:text-white/60 transition-colors flex-shrink-0 mt-0.5"
+        aria-label="Dismiss"
+      >
+        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      </button>
+
+      {/* Progress bar */}
+      <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-white/[0.05]">
+        <div
+          className={`h-full ${barColor} transition-none`}
+          style={{ width: `${progress}%` }}
+        />
+      </div>
+    </div>
+  );
+}
 
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
 
-  const showToast = useCallback((message: string, type: ToastType = "info") => {
-    const id = Math.random().toString(36).slice(2);
-    setToasts((prev) => [...prev, { id, type, message }]);
+  const removeToast = useCallback((id: number) => {
+    setToasts((prev) =>
+      prev.map((t) => (t.id === id ? { ...t, exiting: true } : t))
+    );
     setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id));
-    }, 4500);
+    }, 300);
   }, []);
 
-  function dismiss(id: string) {
-    setToasts((prev) => prev.filter((t) => t.id !== id));
-  }
+  const showToast = useCallback(
+    (message: string, type: ToastType = "info") => {
+      const id = ++idCounter;
+      setToasts((prev) => [...prev, { id, message, type }]);
+      setTimeout(() => removeToast(id), TOAST_DURATION);
+    },
+    [removeToast]
+  );
 
   return (
     <ToastContext.Provider value={{ showToast }}>
       {children}
-
-      {/* Toast container */}
-      <div className="fixed top-4 right-4 z-[9999] flex flex-col gap-3 pointer-events-none max-w-sm w-full">
-        {toasts.map((toast) => (
-          <div
-            key={toast.id}
-            className={`
-              pointer-events-auto flex items-start gap-3 px-4 py-3.5 rounded-2xl border
-              shadow-2xl shadow-zinc-950/60 backdrop-blur-sm
-              animate-slideInRight
-              ${STYLES[toast.type]}
-            `}
-          >
-            {ICONS[toast.type]}
-            <span className="text-sm font-medium leading-snug flex-1">{toast.message}</span>
-            <button
-              onClick={() => dismiss(toast.id)}
-              className="text-zinc-500 hover:text-zinc-300 transition-colors ml-1 flex-shrink-0 -mt-0.5"
-              aria-label="Dismiss"
-            >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
+      {/* Toast Container */}
+      <div className="fixed top-4 right-4 z-[100] flex flex-col gap-2.5 pointer-events-none">
+        {toasts.map((t) => (
+          <div key={t.id} className="pointer-events-auto">
+            <ToastItem toast={t} onRemove={removeToast} />
           </div>
         ))}
       </div>

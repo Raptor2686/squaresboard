@@ -12,5 +12,10 @@ class Settings:
     THESPORTSDB_API_KEY: str = os.getenv("THESPORTSDB_API_KEY", "")
     FRONTEND_URL: str = os.getenv("FRONTEND_URL", "http://localhost:5173")
     SECRET_KEY: str = os.getenv("SECRET_KEY", "dev-secret-change-in-production")
+    ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development")  # development | production
+
+    @property
+    def is_production(self) -> bool:
+        return self.ENVIRONMENT.lower() == "production"
 
 settings = Settings()

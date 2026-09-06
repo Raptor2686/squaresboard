@@ -1,9 +1,41 @@
+# Dependencies
 node_modules/
+.venv/
+venv/
+
+# Python
 __pycache__/
 *.pyc
+*.pyo
+*.egg-info/
+
+# Database
 *.db
+*.sqlite3
+
+# Environment & Secrets — NEVER commit these
 .env
+.env.local
+.env.*.local
+
+# Build outputs
 dist/
+build/
 release/
 
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Deployment
 .vercel
+
+# Capacitor build artifacts
+android/
+ios/

@@ -19,7 +19,20 @@ def _make_async_url(url: str) -> str:
 
 _db_url = _make_async_url(settings.DATABASE_URL)
 
-engine = create_async_engine(_db_url, echo=False)
+_is_sqlite = "sqlite" in _db_url
+
+# Production PostgreSQL needs connection pool tuning;
+# SQLite doesn't support pool_size / max_overflow.
+_engine_kwargs: dict = {"echo": False}
+if not _is_sqlite:
+    _engine_kwargs.update({
+        "pool_size": 10,
+        "max_overflow": 20,
+        "pool_recycle": 1800,   # recycle connections every 30 min
+        "pool_pre_ping": True,  # verify connection health before use
+    })
+
+engine = create_async_engine(_db_url, **_engine_kwargs)
 async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
 

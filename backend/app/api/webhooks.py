@@ -1,5 +1,6 @@
 import stripe
 import uuid
+from datetime import datetime
 from fastapi import APIRouter, Request, HTTPException
 from sqlalchemy import select
 from app.config import settings
@@ -30,9 +31,22 @@ async def stripe_webhook(request: Request):
             gold_coins = float(meta.get("gold_coins", 0))
             bonus_sc = float(meta.get("bonus_sc", 0))
             bundle_id = meta.get("bundle_id", "unknown")
+            payment_intent_id = intent["id"]
 
             if user_id and gold_coins > 0:
                 async with async_session() as session:
+                    # ── Idempotency check ──
+                    # Stripe may retry webhooks — prevent double-crediting
+                    existing_tx = await session.execute(
+                        select(Transaction).where(
+                            Transaction.reference_id == payment_intent_id,
+                            Transaction.type == "gc_purchase",
+                        )
+                    )
+                    if existing_tx.scalar_one_or_none():
+                        print(f"[webhook] SKIP duplicate: pi={payment_intent_id}, user={user_id}")
+                        return {"received": True, "status": "duplicate"}
+
                     result = await session.execute(select(User).where(User.id == user_id))
                     db_user = result.scalar_one_or_none()
                     if db_user:
@@ -43,7 +57,7 @@ async def stripe_webhook(request: Request):
                             amount=gold_coins,
                             type="gc_purchase",
                             currency="GC",
-                            reference_id=intent["id"],
+                            reference_id=payment_intent_id,
                         )
                         session.add(tx)
 
@@ -56,11 +70,11 @@ async def stripe_webhook(request: Request):
                                 amount=bonus_sc,
                                 type="sc_earn",
                                 currency="SC",
-                                reference_id=intent["id"],
+                                reference_id=payment_intent_id,
                             )
                             session.add(sc_tx)
 
                         await session.commit()
-                print(f"[webhook] GC credited: user={user_id}, gc={gold_coins}, sc_bonus={bonus_sc}, bundle={bundle_id}")
+                print(f"[webhook] GC credited: user={user_id}, gc={gold_coins}, sc_bonus={bonus_sc}, bundle={bundle_id}, pi={payment_intent_id}")
 
     return {"received": True}

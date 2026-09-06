@@ -185,6 +185,9 @@ app = FastAPI(
     title="SquaresBoard API",
     version="1.0.0",
     lifespan=lifespan,
+    # Disable interactive docs in production for security
+    docs_url="/docs" if not settings.is_production else None,
+    redoc_url="/redoc" if not settings.is_production else None,
 )
 
 frontend_origins = [
@@ -193,16 +196,24 @@ frontend_origins = [
     if url.strip()
 ]
 
-ALLOWED_ORIGINS = [
-    "http://localhost:5173",
-    "https://localhost:5173",
-    "http://localhost:3000",
-    "http://localhost",
-    "https://localhost",
-    "capacitor://localhost",
-    "https://squaresboard.onrender.com",
-    *frontend_origins,
-]
+# In production, only allow configured frontend origins.
+# In development, also allow localhost variants for convenience.
+if settings.is_production:
+    ALLOWED_ORIGINS = [
+        *frontend_origins,
+        "capacitor://localhost",  # mobile app
+    ]
+else:
+    ALLOWED_ORIGINS = [
+        "http://localhost:5173",
+        "https://localhost:5173",
+        "http://localhost:3000",
+        "http://localhost",
+        "https://localhost",
+        "capacitor://localhost",
+        "https://squaresboard.onrender.com",
+        *frontend_origins,
+    ]
 
 app.add_middleware(
     CORSMiddleware,
@@ -212,9 +223,33 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+# ── Production error handler ────────────────────────────────────────────────
+# Don't leak stack traces to users in production
+if settings.is_production:
+    from fastapi import Request
+    from fastapi.responses import JSONResponse
+
+    @app.exception_handler(Exception)
+    async def production_error_handler(request: Request, exc: Exception):
+        import traceback
+        traceback.print_exc()  # still log full trace to server logs
+        return JSONResponse(
+            status_code=500,
+            content={"detail": "Internal server error"},
+        )
+
+
 @app.get("/")
 async def root():
-    return {"msg": "SquaresBoard API", "version": "1.0.0", "docs": "/docs"}
+    return {"msg": "SquaresBoard API", "version": "1.0.0", "status": "live"}
+
+
+@app.get("/health")
+async def health():
+    """Health check endpoint for Render monitoring."""
+    return {"status": "ok"}
+
 
 app.include_router(auth.router, prefix="/api/auth")
 app.include_router(users.router, prefix="/api/users")

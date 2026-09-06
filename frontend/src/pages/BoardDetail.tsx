@@ -16,7 +16,7 @@ interface BoardData {
   board_id: string;
   board_status: string;
   price_tier_gc: number;
-  entry_currency: string;   // "GC" or "SC"
+  entry_currency: string;
   payout_sc: number;
   quarter: string;
   is_private: boolean;
@@ -74,18 +74,12 @@ export default function BoardDetail() {
     } catch {}
   }
 
-  useEffect(() => {
-    loadBoard();
-  }, [boardId]);
-
-  useEffect(() => {
-    loadWallet();
-  }, [user]);
+  useEffect(() => { loadBoard(); }, [boardId]);
+  useEffect(() => { loadWallet(); }, [user]);
 
   async function handleBuySquare(position: number) {
     if (!user) { window.location.hash = "#/auth"; return; }
     if (!board || board.board_status !== "open") return;
-
     setPurchasing(position);
     setError("");
     try {
@@ -102,34 +96,22 @@ export default function BoardDetail() {
         showToast(msg, "error");
         return;
       }
-
-      // Update local wallet balance from response
       if (data.new_gold_coins !== undefined || data.new_sweep_coins !== undefined) {
         setWalletBalance({
           gold_coins: data.new_gold_coins ?? walletBalance?.gold_coins ?? 0,
           sweep_coins: data.new_sweep_coins ?? walletBalance?.sweep_coins ?? 0,
         });
       }
-
       showToast(`Square claimed! Position ${position + 1} is yours. 🎉`, "success");
       await loadBoard();
-
-      // Check if the board just filled
       const refreshed = await fetch(`${API}/squares/board/${boardId}`, { credentials: "include" });
       if (refreshed.ok) {
         const refreshedData: BoardData = await refreshed.json();
-        if (refreshedData.board_status === "locked") {
-          showToast("Board is full! Numbers have been assigned. 🔒", "info");
-        }
+        if (refreshedData.board_status === "locked") showToast("Board is full! Numbers have been assigned. 🔒", "info");
         if (refreshedData.board_status === "resolved") {
-          const winSquare = refreshedData.squares.find(
-            (s) => s.number !== null && s.number === refreshedData.winning_number
-          );
+          const winSquare = refreshedData.squares.find((s) => s.number !== null && s.number === refreshedData.winning_number);
           if (winSquare?.owner_id === user.id) {
-            showToast(
-              `You won! 🏆 ${refreshedData.payout_sc.toLocaleString()} SC has been credited to your wallet!`,
-              "win"
-            );
+            showToast(`You won! 🏆 ${refreshedData.payout_sc.toLocaleString()} SC has been credited!`, "win");
           }
         }
         setBoard(refreshedData);
@@ -154,8 +136,14 @@ export default function BoardDetail() {
   }
 
   if (loading) return (
-    <div className="p-8 text-center">
-      <div className="text-zinc-500 animate-pulse">Loading board...</div>
+    <div className="p-8 text-center py-20">
+      <div className="text-zinc-600 flex items-center justify-center gap-2">
+        <svg className="w-5 h-5 animate-spin text-brand-400" fill="none" viewBox="0 0 24 24">
+          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+        </svg>
+        Loading board...
+      </div>
     </div>
   );
   if (error && !board) return <div className="p-8 text-center text-red-400">{error}</div>;
@@ -166,20 +154,16 @@ export default function BoardDetail() {
   const winningSquare = squares.find((s) => s.number !== null && s.number === winning_number);
   const userWon = winningSquare?.owner_id === user?.id;
   const filledCount = squares.filter((s) => s.owner_id).length;
-
-  // Relevant balance for this board's currency
-  const relevantBalance = isScBoard
-    ? walletBalance?.sweep_coins
-    : walletBalance?.gold_coins;
+  const relevantBalance = isScBoard ? walletBalance?.sweep_coins : walletBalance?.gold_coins;
   const canAfford = relevantBalance === undefined || relevantBalance >= price_tier_gc;
 
   return (
-    <div className="max-w-2xl mx-auto p-6 space-y-6">
-      {/* Top Navigation */}
+    <div className="max-w-2xl mx-auto px-4 md:px-6 py-6 space-y-5 animate-fadeIn">
+      {/* Navigation */}
       <div className="flex items-center justify-between">
         <Link
           to={`/game/${game.id}`}
-          className="inline-flex items-center gap-2 text-zinc-400 hover:text-white text-xs font-semibold transition-colors bg-zinc-800/60 hover:bg-zinc-800 border border-zinc-700/60 rounded-xl px-3 py-1.5"
+          className="inline-flex items-center gap-2 text-zinc-500 hover:text-white text-xs font-medium transition-colors glass rounded-xl px-3 py-2"
         >
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
@@ -188,37 +172,42 @@ export default function BoardDetail() {
         </Link>
       </div>
 
-      {/* Game info header */}
-      <div className="bg-zinc-800/40 border border-zinc-700/60 rounded-2xl p-6 flex flex-col md:flex-row items-center justify-between gap-4">
+      {/* Game Info Header */}
+      <div className="glass rounded-2xl p-6 card-highlight flex flex-col md:flex-row items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-black text-white tracking-tight">
-            {game.away_team} <span className="text-zinc-500 font-medium text-lg">vs</span> {game.home_team}
+            {game.away_team} <span className="text-zinc-600 font-medium text-lg">vs</span> {game.home_team}
           </h1>
-          <p className="text-zinc-400 text-xs mt-1 uppercase font-semibold tracking-wider">
+          <p className="text-zinc-500 text-xs mt-1 uppercase font-semibold tracking-wider">
             {quarter} · {new Date(game.event_time).toLocaleString()}
           </p>
         </div>
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl px-5 py-3 text-center min-w-[100px]">
-          <span className="block text-[10px] text-zinc-500 uppercase tracking-wider font-semibold">
-            {game.status === "live" ? "🔴 Live" : "Score"}
+        <div className="bg-surface-950 border border-white/[0.04] rounded-xl px-5 py-3 text-center min-w-[100px]">
+          <span className="block text-[10px] text-zinc-600 uppercase tracking-wider font-semibold">
+            {game.status === "live" ? (
+              <span className="flex items-center justify-center gap-1.5 text-red-400">
+                <span className="live-dot" style={{ width: 5, height: 5 }} />
+                Live
+              </span>
+            ) : "Score"}
           </span>
-          <span className="text-xl font-extrabold font-mono text-white">
+          <span className="text-xl font-black font-mono text-white tabular-nums">
             {game.home_score !== null ? `${game.away_score} – ${game.home_score}` : "Upcoming"}
           </span>
         </div>
       </div>
 
-      {/* Wallet balance for this board's currency */}
+      {/* Wallet balance */}
       {user && walletBalance !== null && (
         <div className={`flex items-center justify-between rounded-2xl px-5 py-3 border ${
           isScBoard
-            ? "bg-purple-950/30 border-purple-800/40"
-            : "bg-yellow-950/30 border-yellow-800/40"
+            ? "bg-sweep-950/20 border-sweep-800/20"
+            : "bg-coin-950/20 border-coin-800/20"
         }`}>
-          <div className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">
+          <div className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">
             Your {isScBoard ? "Sweepstakes Coins" : "Gold Coins"}
           </div>
-          <div className={`font-mono font-extrabold text-lg ${isScBoard ? "text-purple-300" : "text-yellow-400"}`}>
+          <div className={`font-mono font-extrabold text-lg tabular-nums ${isScBoard ? "text-sweep-400" : "text-coin-400"}`}>
             {isScBoard
               ? `${walletBalance.sweep_coins % 1 === 0 ? walletBalance.sweep_coins.toLocaleString() : walletBalance.sweep_coins.toFixed(2)} 🎟️`
               : `${walletBalance.gold_coins % 1 === 0 ? walletBalance.gold_coins.toLocaleString() : walletBalance.gold_coins.toFixed(2)} 🟡`}
@@ -226,135 +215,130 @@ export default function BoardDetail() {
         </div>
       )}
 
-      {/* Not enough coins warning */}
+      {/* Insufficient coins warning */}
       {user && !canAfford && board_status === "open" && (
-        <div className={`rounded-xl px-4 py-3 text-sm border ${
+        <div className={`rounded-xl px-4 py-3 text-sm border animate-fadeIn ${
           isScBoard
-            ? "bg-purple-950/40 border-purple-700/60 text-purple-300"
-            : "bg-yellow-950/40 border-yellow-700/60 text-yellow-300"
+            ? "bg-sweep-950/30 border-sweep-500/15 text-sweep-300"
+            : "bg-coin-950/30 border-coin-500/15 text-coin-300"
         }`}>
           ⚠️ You need {formatCoins(price_tier_gc, entry_currency)} to buy a square.{" "}
           {isScBoard ? (
-            <Link to="/wallet" className="underline font-semibold">Claim free SC or buy GC to earn SC →</Link>
+            <Link to="/wallet" className="underline font-semibold">Claim free SC or buy GC →</Link>
           ) : (
             <Link to="/wallet" className="underline font-semibold">Buy Gold Coins →</Link>
           )}
         </div>
       )}
 
-      {/* Private board share banner */}
+      {/* Private board share */}
       {is_private && (
-        <div className="bg-zinc-800/80 border border-zinc-700/80 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div className="glass rounded-2xl p-5 flex flex-col sm:flex-row items-center justify-between gap-4 card-highlight">
           <div className="flex items-center gap-3">
             <span className="text-xl">🔒</span>
             <div>
-              <span className="block font-semibold text-sm text-white">Private Board Active</span>
-              <span className="block text-xs text-zinc-400">Invite friends using this link.</span>
+              <span className="block font-semibold text-sm text-white">Private Board</span>
+              <span className="block text-xs text-zinc-500">Share this link to invite friends.</span>
             </div>
           </div>
           <button
             onClick={handleCopyInviteLink}
-            className="w-full sm:w-auto bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold px-4 py-2 rounded-xl transition-all"
+            className="w-full sm:w-auto bg-gradient-to-r from-brand-600 to-brand-500 hover:from-brand-500 hover:to-brand-400 text-white text-xs font-semibold px-5 py-2.5 rounded-xl transition-all duration-200 shadow-lg shadow-brand-950/30"
           >
             {copiedLink ? "Copied! ✓" : "Copy Invite Link"}
           </button>
         </div>
       )}
 
-      {/* Resolved winner banner */}
+      {/* Winner banner */}
       {board_status === "resolved" && winningSquare && (
-        <div className={`rounded-2xl p-6 text-center space-y-3 border ${
+        <div className={`rounded-2xl p-7 text-center space-y-3 border animate-fadeIn ${
           userWon
-            ? "bg-gradient-to-r from-yellow-950/60 via-amber-900/40 to-yellow-950/60 border-yellow-700/60"
-            : "bg-zinc-800/40 border-zinc-700/60"
+            ? "bg-gradient-to-r from-yellow-950/50 via-amber-950/30 to-yellow-950/50 border-yellow-500/20 shadow-glow-gold"
+            : "glass card-highlight"
         }`}>
-          <div className="text-3xl">{userWon ? "🏆" : "🎯"}</div>
+          <div className="text-4xl">{userWon ? "🏆" : "🎯"}</div>
           <div>
-            <h3 className={`text-lg font-bold ${userWon ? "text-yellow-400" : "text-zinc-300"}`}>
+            <h3 className={`text-xl font-black ${userWon ? "text-yellow-400" : "text-zinc-300"}`}>
               {userWon ? "You Won!" : "Board Resolved"}
             </h3>
-            <p className="text-zinc-300 text-sm mt-1">
+            <p className="text-zinc-300 text-sm mt-2">
               Winning Number:{" "}
-              <span className="font-mono font-extrabold text-white bg-zinc-900 border border-zinc-800 px-2 py-0.5 rounded">
+              <span className="font-mono font-black text-white bg-surface-950 border border-white/[0.06] px-2.5 py-1 rounded-lg">
                 #{winningSquare.number}
               </span>
             </p>
-            <p className="text-zinc-400 text-xs mt-2">
-              Winner{" "}
-              <span className="font-bold text-white">
-                {userWon ? "YOU" : winningSquare.owner_name}
-              </span>{" "}
+            <p className="text-zinc-500 text-xs mt-2">
+              Winner <span className="font-bold text-white">{userWon ? "YOU" : winningSquare.owner_name}</span>{" "}
               takes home{" "}
-              <span className="font-extrabold text-purple-300">{payout_sc % 1 === 0 ? payout_sc.toLocaleString() : payout_sc.toFixed(2)} 🎟️ SC</span>!
+              <span className="font-bold text-sweep-400">{payout_sc % 1 === 0 ? payout_sc.toLocaleString() : payout_sc.toFixed(2)} 🎟️ SC</span>!
             </p>
           </div>
           <div className="pt-2">
-            <Link to={`/game/${game.id}`} className="text-xs font-bold text-blue-400 hover:text-blue-300 uppercase tracking-wider">
+            <Link to={`/game/${game.id}`} className="text-xs font-bold text-brand-400 hover:text-brand-300 uppercase tracking-wider transition-colors">
               Play Next Board →
             </Link>
           </div>
         </div>
       )}
 
-      {/* Cancelled banner */}
+      {/* Cancelled */}
       {board_status === "cancelled" && (
-        <div className="bg-red-950/30 border border-red-800/50 rounded-2xl p-5 text-center space-y-1">
+        <div className="bg-red-950/20 border border-red-500/15 rounded-2xl p-6 text-center space-y-2 animate-fadeIn">
           <div className="text-2xl">❌</div>
           <h3 className="font-bold text-red-400">Board Cancelled</h3>
-          <p className="text-zinc-400 text-sm">
+          <p className="text-zinc-500 text-sm">
             The quarter started before this board filled. All payments have been refunded.
           </p>
         </div>
       )}
 
-      {/* Square Grid Panel */}
-      <div className="bg-zinc-800 border border-zinc-700/60 rounded-3xl p-6">
-        <div className="flex justify-between items-center mb-2">
+      {/* Square Grid */}
+      <div className="glass rounded-3xl p-6 card-highlight">
+        <div className="flex justify-between items-center mb-3">
           <div>
             <h2 className="font-bold text-lg text-white">Board Squares</h2>
-            <span className="text-xs text-zinc-500">
+            <span className="text-xs text-zinc-600">
               {board_status === "open"
-                ? `${filledCount}/10 claimed · Click an open square to buy`
+                ? `${filledCount}/10 claimed · Click an open square`
                 : board_status === "locked"
-                ? "All squares claimed · Numbers assigned · Waiting for quarter to end"
+                ? "All squares claimed · Numbers assigned · Waiting for quarter"
                 : board_status === "resolved"
                 ? "Board resolved"
                 : "Board cancelled"}
             </span>
           </div>
-          {/* Entry cost badge — currency-aware */}
-          <span className={`text-xs font-bold px-3 py-1 rounded-xl border ${
+          <span className={`text-xs font-bold px-3 py-1.5 rounded-xl border ${
             isScBoard
-              ? "bg-purple-950 text-purple-300 border-purple-800/40"
-              : "bg-yellow-950 text-yellow-400 border-yellow-800/40"
+              ? "bg-sweep-950/40 text-sweep-400 border-sweep-800/30"
+              : "bg-coin-950/40 text-coin-400 border-coin-800/30"
           }`}>
             {formatCoins(price_tier_gc, entry_currency)} / sq
           </span>
         </div>
 
-        {/* Fill progress bar */}
+        {/* Progress */}
         {board_status === "open" && (
-          <div className="w-full bg-zinc-700 rounded-full h-1.5 mb-5">
+          <div className="w-full bg-surface-950 rounded-full h-1.5 mb-5 border border-white/[0.02]">
             <div
-              className="bg-blue-500 h-1.5 rounded-full transition-all"
+              className="bg-gradient-to-r from-brand-500 to-sweep-500 h-full rounded-full transition-all duration-500"
               style={{ width: `${(filledCount / 10) * 100}%` }}
             />
           </div>
         )}
 
         {error && (
-          <p className="text-red-400 text-sm bg-red-900/30 border border-red-800 rounded-xl px-3 py-2 mb-4">
+          <p className="text-red-400 text-sm bg-red-950/40 border border-red-500/20 rounded-xl px-3 py-2 mb-4 animate-fadeIn">
             {error}
           </p>
         )}
 
         <div className="grid grid-cols-5 gap-3">
-          {squares.map((sq) => {
+          {squares.map((sq, idx) => {
             const isAvailable = !sq.owner_id && board_status === "open";
             const isOwned = sq.owner_id === user?.id;
             const isPurchasing = purchasing === sq.position;
-            const isWinner =
-              board_status === "resolved" && sq.number !== null && sq.number === winning_number;
+            const isWinner = board_status === "resolved" && sq.number !== null && sq.number === winning_number;
 
             return (
               <button
@@ -362,53 +346,46 @@ export default function BoardDetail() {
                 onClick={() => isAvailable && handleBuySquare(sq.position)}
                 disabled={!isAvailable || isPurchasing}
                 className={`
-                  relative h-24 rounded-2xl border-2 flex flex-col items-center justify-center
-                  transition-all text-sm font-semibold select-none
+                  relative h-28 rounded-2xl border-2 flex flex-col items-center justify-center
+                  transition-all duration-200 text-sm font-semibold select-none animate-fadeIn
                   ${
                     isWinner
-                      ? "border-yellow-400 bg-yellow-950/80 ring-4 ring-yellow-400/30 animate-pulse"
+                      ? "border-yellow-400 bg-gradient-to-br from-yellow-950/80 to-amber-950/60 ring-4 ring-yellow-400/20 shadow-glow-gold"
                       : isOwned
-                      ? "border-green-500 bg-green-950/70 shadow-lg shadow-green-950/10"
+                      ? "border-emerald-500/60 bg-emerald-950/40 shadow-glow-green"
                       : isAvailable
                       ? isScBoard
-                        ? "border-purple-500/50 bg-purple-950/20 hover:bg-purple-900/30 cursor-pointer hover:border-purple-400 hover:scale-[1.03]"
-                        : "border-blue-500/50 bg-blue-950/20 hover:bg-blue-900/30 cursor-pointer hover:border-blue-400 hover:scale-[1.03]"
-                      : "border-zinc-700/60 bg-zinc-800/50 opacity-60 cursor-default"
+                        ? "border-sweep-500/30 bg-sweep-950/10 hover:bg-sweep-950/30 cursor-pointer hover:border-sweep-400/50 hover:scale-[1.03] hover:shadow-glow-purple"
+                        : "border-brand-500/30 bg-brand-950/10 hover:bg-brand-950/20 cursor-pointer hover:border-brand-400/50 hover:scale-[1.03] hover:shadow-glow-blue"
+                      : "border-white/[0.04] bg-surface-900/40 opacity-50 cursor-default"
                   }
                 `}
+                style={{ animationDelay: `${idx * 0.03}s`, animationFillMode: "both" }}
               >
-                <span
-                  className={`text-3xl font-extrabold font-mono ${
-                    isWinner
-                      ? "text-yellow-400"
-                      : sq.number !== null
-                      ? "text-white"
-                      : "text-zinc-600"
-                  }`}
-                >
+                <span className={`text-3xl font-black font-mono tabular-nums ${
+                  isWinner ? "text-yellow-400" : sq.number !== null ? "text-white" : "text-zinc-700"
+                }`}>
                   {sq.number !== null ? sq.number : "?"}
                 </span>
 
                 {sq.owner_name && (
-                  <span className="text-[10px] text-zinc-400 mt-1.5 truncate w-full text-center px-2 font-medium">
+                  <span className="text-[10px] text-zinc-500 mt-1.5 truncate w-full text-center px-2 font-medium">
                     {sq.owner_name}
                   </span>
                 )}
 
                 {isOwned && !isWinner && (
-                  <span className="absolute top-1.5 right-1.5 text-[9px] uppercase tracking-wider font-extrabold bg-green-600 text-white px-1.5 py-0.5 rounded-md">
+                  <span className="absolute top-1.5 right-1.5 text-[8px] uppercase tracking-wider font-black bg-emerald-500 text-white px-1.5 py-0.5 rounded-md">
                     Mine
                   </span>
                 )}
-
                 {isWinner && (
-                  <span className="absolute top-1.5 right-1.5 text-[9px] uppercase tracking-wider font-extrabold bg-yellow-500 text-black px-1.5 py-0.5 rounded-md">
+                  <span className="absolute top-1.5 right-1.5 text-[8px] uppercase tracking-wider font-black bg-yellow-400 text-black px-1.5 py-0.5 rounded-md">
                     Win
                   </span>
                 )}
-
                 {isPurchasing && (
-                  <span className="absolute inset-0 bg-zinc-950/90 rounded-2xl flex items-center justify-center text-xs text-blue-400 font-bold gap-2">
+                  <span className="absolute inset-0 bg-surface-950/90 rounded-2xl flex items-center justify-center text-xs text-brand-400 font-bold gap-2">
                     <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
@@ -423,20 +400,18 @@ export default function BoardDetail() {
       </div>
 
       {board_status === "open" && !user && (
-        <p className="text-center text-zinc-500 text-xs">
+        <p className="text-center text-zinc-600 text-xs">
           Please{" "}
-          <Link to="/auth" className="text-blue-400 hover:text-blue-300 font-semibold underline">
-            sign in
-          </Link>{" "}
+          <Link to="/auth" className="text-brand-400 hover:text-brand-300 font-semibold transition-colors">sign in</Link>{" "}
           to buy a square.
         </p>
       )}
 
-      {/* Potential payout info */}
+      {/* Payout info */}
       {board_status === "open" && (
-        <div className="bg-zinc-800/30 border border-zinc-800 rounded-xl p-4 text-center text-xs text-zinc-500">
-          <span className="font-semibold text-zinc-300">Potential payout: </span>
-          <span className="text-purple-300 font-bold font-mono">{payout_sc.toLocaleString()} 🎟️ SC</span>
+        <div className="glass rounded-xl p-4 text-center text-xs text-zinc-600 card-highlight">
+          <span className="font-semibold text-zinc-400">Potential payout: </span>
+          <span className="text-sweep-400 font-bold font-mono tabular-nums">{payout_sc.toLocaleString()} 🎟️ SC</span>
           <span className="ml-2">(90% of the total pot — platform keeps 10%)</span>
         </div>
       )}
